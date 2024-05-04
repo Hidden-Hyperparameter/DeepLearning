@@ -46,6 +46,7 @@ The training of Diffusion Models are very different from the previous generative
 
 The training statistics are listed in the log file in the folder, and are ploted below.
 
+![](./docs/train_curve.png)
 
 ## Code References
 

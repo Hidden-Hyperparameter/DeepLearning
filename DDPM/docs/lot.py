@@ -30,8 +30,9 @@ print(len(traines))
 print(len(valides))
 import numpy as np
 import matplotlib.pyplot as plt
-x = np.arange(1,len(traines),1)
+x = np.arange(0,len(traines),1)
 plt.plot(x,np.array(traines),label='train loss')
 plt.plot(x,np.array(valides),label='valid loss')
 plt.legend()
-plt.show()
+# plt.show()
+plt.savefig('./train_curve.png')
