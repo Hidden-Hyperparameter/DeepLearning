@@ -5,7 +5,7 @@ Find out the problem: the output is 0!
 
 **note**: the output is only 0 after several epochs. That's why I don't find that in the beginning.
 
-Modification 1: **replace `ReLU` in the `Res`; use LeakyReLU.**
+Modification 1: **replace `ReLU` in the `Res`; use LeakyReLU.** (No ReLU for ResNet output!)
 
 Modification 2: Use U-net structure: cross-connection.
 
@@ -18,7 +18,7 @@ Here is an example failure image.
 
 Modification: Add attention.
 
-Attention should contain `out_proj`.
+Attention should contain `out_proj` and have residual connections.
 
 ![](./docs/best_1.png)
 

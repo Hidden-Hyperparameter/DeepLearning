@@ -18,12 +18,8 @@ class Res(nn.Module):
     def forward(self,x,t):
         res = x.clone()
         x = self.conv1(x)
-        # print(t.shape)
-        # print('x',x)
-        # print('t',self.t_net(t))
         x = x + self.t_net(t).reshape(x.shape)
         x = self.conv2(x) + res
-        # x = F.relu(x)
         return x
 
 class SinousEmbedding(nn.Module):
@@ -65,9 +61,7 @@ class ResBlockWithAttention(nn.Module):
         self.conv=nn.Sequential(
             nn.Conv2d(in_channel,out_channel,(kernel_size,kernel_size),padding=(kernel_size-1)//2),
             nn.BatchNorm2d(out_channel),
-            # nn.Dropout2d(0.2),
             nn.ReLU(),
-            # nn.ReLU(),
         )
         self.reses = nn.ModuleList(
             [Res(out_channel,kernel_size,x_size) for _ in range(4)]
@@ -97,8 +91,6 @@ class DDPM(nn.Module):
             ResBlockWithAttention(64,128,x_size=14), # 14 14
             nn.MaxPool2d(kernel_size=(2,2)), # 7 7
             ResBlockWithAttention(128,256,x_size=7), # 7 7
-            # nn.MaxPool2d(kernel_size=(2,2)), # 7 7
-            # ResBlockWithAttention(256,512,x_size=4), # 7 7
         ])
         self.middle = nn.ModuleList([
             nn.Conv2d(256,256,kernel_size=(5,5),padding=2),
@@ -106,27 +98,16 @@ class DDPM(nn.Module):
             Attention(256)
         ])
         self.down= nn.ModuleList([
-            # nn.Upsample(scale_factor=2),
             ResBlockWithAttention(512,128,x_size=7), # 7 7
             nn.Upsample(scale_factor=2),
             ResBlockWithAttention(256,64,x_size=14),
             nn.Upsample(scale_factor=2),
             ResBlockWithAttention(128,1,x_size=28,with_attention=False),       
-            # nn.Upsample(scale_factor=2),
-            # ResBlockWithAttention(64,1,x_size=28),       
         ])
-        # self.out = nn.Sequential(
-        #     nn.Linear(784,784),
-        #     # nn.Dropout(0.2),
-        #     # nn.ReLU(),
-        #     # nn.Linear(512,self.in_size),
-        #     # nn.Sigmoid()
-        # )
+
     def forward(self,x,t):
         x = x.reshape(-1,1,28,28)
-        # print('t',t)
-        ttensor = self.t_embedding(t)#.reshape(-1,1,28,28)
-        # print(ttensor)
+        ttensor = self.t_embedding(t)
         batch = x.shape[0]
         ups = []
         for i,ly in enumerate(self.up):
@@ -136,24 +117,13 @@ class DDPM(nn.Module):
                 ups.append(cl)
             else:
                 x = ly(x)
-            # print(x.shape)
         for ly in self.middle:
             x = ly(x)
-        # print(x.shape)
         for ly in self.down:
             if isinstance(ly,ResBlockWithAttention):
                 old = ups.pop()
-                # print('x',x.shape)
-                # print('old',old.shape)
                 x = ly(torch.cat((x,old),dim=1),ttensor)
             else:
                 x = ly(x)
-        # x = self.conv_f(x)
-        # print(x)
         x = x.reshape(batch,-1)
         return x
-        # print(x)
-        # print(x.shape)
-        # print(ttensor.shape)
-        # print(x)
-        # return self.out(x)

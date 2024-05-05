@@ -37,7 +37,6 @@ def sample(model:DDPM,save_dir):
         if t==1:
             sigmaz = 0
         x = 1/((alphas[t])**0.5)*(x-(1-alphas[t])/((1-alpha_bars[t])**0.5)*model(x,(t*torch.ones(x.shape[0],dtype=torch.long)).to(device)))+sigmaz
-    # x = torch.sigmoid(x)
     grid = torchvision.utils.make_grid(x.reshape(-1,1,28,28).cpu(), nrow=10)
     torchvision.utils.save_image(grid, save_dir)
 
@@ -49,30 +48,16 @@ def train(epochs,model:DDPM,optimizer,eval_interval=1):
             nums = 0
             for x,_ in bar:
                 x = x.to(device)
-                # print(x)
                 epss = torch.randn_like(x).reshape(-1,784).to(device)
                 ts = ((torch.rand([x.shape[0]])*T).to(torch.long)).to(device)
                 alpha_tbars = alpha_bars[ts]
-                # print(x.shape)
                 value = (((alpha_tbars)**0.5).reshape(-1,1,1,1)*x).reshape(-1,784)+((1-alpha_tbars)**0.5).reshape(-1,1)*epss
-                # print(x)
-                # print(value.shape)
-                # print(epss.shape)
-                # print((value - epss).mean())
                 out = model(value,ts)
-                # if epoch >= 2:
-                #     # print('epss',epss[0])
-                #     print('out',out[0])
-                    # print('minus',epss[0]-out[0])
-                    # print('num',(out[0]>1e-4).sum())
                 loss = ((epss-out)**2).mean().sum()
-                # F.mse_loss(epss,out)
                 losses += loss
                 nums += x.shape[0]
                 optimizer.zero_grad()
                 loss.backward()
-                # print(model.res_blocks[0].reses[0].conv1[0].weight)
-                # print('grad',model.res_blocks[0].reses[0].conv1[0].weight.grad)
                 optimizer.step()
                 bar.set_description('epoch {}, loss {:.4f}'.format(epoch,128*losses/nums))
         model.eval()
@@ -83,7 +68,6 @@ def train(epochs,model:DDPM,optimizer,eval_interval=1):
                 for x,_ in bar:
                     x = x.to(device)
                     epss = torch.randn_like(x).reshape(-1,784).to(device)
-                    # ts = ((torch.rand([1])*T*torch.ones(x.shape[0])).to(torch.long)//T+1).to(device)
                     ts = ((torch.rand(x.shape[0])*T).to(torch.long)).to(device)
                     alpha_tbars = alpha_bars[ts]
                     value = (((alpha_tbars)**0.5).reshape(-1,1,1,1)*x).reshape(-1,784)+((1-alpha_tbars)**0.5).reshape(-1,1)*epss
