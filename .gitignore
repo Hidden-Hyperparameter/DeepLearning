@@ -1,3 +1,6 @@
 **/__pycache__/*
 **/data
 **/samples
+*/log.log
+Flow/impainting
+Flow/play

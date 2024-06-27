@@ -1,4 +1,4 @@
-import torch
+import torch,torchvision
 from torchvision import datasets, transforms
 import os
 
@@ -73,3 +73,7 @@ class CIFAR_10:
 def count_parameters(model):
     print('Model Parameters Count:', sum(p.numel() for p in model.parameters() if p.requires_grad))
 
+
+def save_figure(path,image:torch.Tensor,nrow=16,):
+    grid = torchvision.utils.make_grid(image.reshape(-1,1,28,28).cpu(), nrow=nrow)
+    torchvision.utils.save_image(grid, path)
