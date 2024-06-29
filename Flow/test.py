@@ -1,10 +1,11 @@
-from model import Coupling,device,Flow,Squeeze,float_tp
+from model import CouplingLayer,device,Flow,Squeeze,float_tp,BatchNorm
 import torch
 from torch.nn.functional import mse_loss
 from tqdm import tqdm
-cp = Coupling(masktype='A',size=28,channel=1).to(device)
+cp = CouplingLayer(masktype='A',size=28,channel=1).to(device)
 flow = Flow().to(device).to(float_tp)
 sq = Squeeze().to(device)
+bn = BatchNorm(size=28,channel=1).to(device)
 
 def test_backward():
     x = torch.randn(10,1,28,28).to(device)
@@ -32,10 +33,11 @@ def test_logdet():
     assert (torch.abs(logdet-u)<1e-4).all()
 
 def test_full_backward():
-    x = torch.randn(1,1,28,28).to(device).to(float_tp)
+    x = torch.randn(5,1,28,28).to(device).to(float_tp)
     flow.to(float_tp)
     y,logdet = flow(x)
     back = flow.backward(y)
+    print(back.shape)
     assert (torch.abs(back-x)<1e-5).all()
 
 def test_full_logdet():
@@ -48,7 +50,7 @@ def test_full_logdet():
         param.data.normal_(std=0.01)
     
     _,logdet = flow(x)
-    print('logdet',logdet)
+    # print('logdet',logdet)
 
     for i in tqdm(range(28)):
         # print(f'------{i}------',flush=True)
@@ -83,10 +85,30 @@ def d_test():
     # singles = [flow(x[i].unsqueeze(0))[-1] for i in range(batch)]
     # assert (torch.abs(torch.cat(singles,dim=-1)-logdet)<1e-5).all()
 
+def batchnorm_test():
+    x = torch.randn(10,1,28,28).to(device).requires_grad_(True)
+    u = torch.zeros([10]).to(device)
+    # print('x=',x)
+    _,logdet = bn(x)
+    # print(logdet,flush=True)
+    for i in tqdm(range(28)):
+        for j in range(28):
+            if x.grad is not None:
+                x.grad.zero_()
+            bn.zero_grad()
+            y,_ = bn(x)
+            y[:,0,i,j].sum().backward()
+            # print(x.grad[:,0,i,j],flush=True)
+            # assert torch.abs(alpha-torch.log(x.grad[:,0,i,j]))<1e-5
+            u += torch.log(x.grad[:,0,i,j]).to(device)
+    print(logdet-u)
+    assert (torch.abs(logdet-u)<1e-4).all()
+
 if __name__ == '__main__':
     # test_backward()
     # print('backward test passed')
     # test_logdet()
     # test_full_backward()
     test_full_logdet()
+    # batchnorm_test()
     # d_test()

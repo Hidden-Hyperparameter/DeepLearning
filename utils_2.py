@@ -1,6 +1,9 @@
 import torch,torchvision
 from torchvision import datasets, transforms
 import os
+torch.manual_seed(42)
+torch.cuda.manual_seed(42)
+torch.backends.cudnn.deterministic = True
 
 class MNIST:
 

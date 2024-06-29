@@ -46,6 +46,6 @@ def read(dataset,epoch=0):
 
 
 if __name__  == '__main__':
-    dataid = 13
+    dataid = 6
     dataset = torch.load(f'./samples/dataset_{dataid}.pt')
     read(dataset,dataid)
