@@ -18,82 +18,6 @@ def detect(x:torch.Tensor):
     assert not torch.isnan(x).any(),x
     assert not torch.isinf(x).any(),x
     # print(x)
-class BatchNorm(nn.Module):
-    """ An implementation of a batch normalization layer from
-    Density estimation using Real NVP
-    (https://arxiv.org/abs/1605.08803).
-    """
-
-    def __init__(self, size,channel, momentum=0.1, eps=1e-5):
-        super().__init__()
-        self.size = size
-        self.channel = channel
-        self.tot = size * size * channel
-        self.log_gamma = nn.Parameter(torch.zeros(self.tot))
-        self.beta = nn.Parameter(torch.zeros(self.tot))
-        self.momentum = momentum
-        self.eps = eps
-
-        self.register_buffer('running_mean', torch.zeros(self.tot))
-        self.register_buffer('running_var', torch.ones(self.tot))
-
-    def forward(self, inputs):
-        batch = inputs.shape[0]
-        inputs = inputs.reshape(batch,-1)
-        if self.training:
-            self.batch_mean = inputs.mean(0)
-            self.batch_var = (
-                inputs - self.batch_mean).pow(2).mean(0) + self.eps
-
-            self.running_mean.mul_(self.momentum)
-            self.running_var.mul_(self.momentum)
-
-            self.running_mean.add_(self.batch_mean.data *
-                                    (1 - self.momentum))
-            self.running_var.add_(self.batch_var.data *
-                                    (1 - self.momentum))
-
-            mean = self.batch_mean
-            var = self.batch_var
-
-            
-            
-        else:
-            mean = self.running_mean
-            var = self.running_var
-
-            # print('difference mean:',F.mse_loss(mean,inputs.mean(0)))
-            # print('difference std:',F.mse_loss(var,(
-            #     inputs - self.batch_mean).pow(2).mean(0) + self.eps))
-            data_mean = inputs.mean(0)
-            data_var = (inputs - data_mean).pow(2).mean(0) + self.eps
-            # print('data mean',data_mean.min(),data_mean.max())
-            # print('use mean',mean.min(),mean.max())
-            # print('data var',data_var.min(),data_var.max())
-            # print('use var',var.min(),var.max())
-
-        x_hat = (inputs - mean) / var.sqrt()
-        y = torch.exp(self.log_gamma) * x_hat + self.beta
-        logdet = (self.log_gamma - 0.5 * torch.log(var)).sum(-1, keepdim=True)
-        # print('var',var.mean())
-        # if not self.training:
-            # print('logdet',logdet.mean())
-        z = y.reshape(batch,self.channel,self.size,self.size)
-        # if not self.training:
-            # print('z range:',z.min(),z.max())
-        return z, logdet
-    def backward(self, inputs,):
-        inputs = inputs.reshape(inputs.shape[0],-1)
-        if self.training:
-            mean = self.batch_mean
-            var = self.batch_var
-        else:
-            mean = self.running_mean
-            var = self.running_var
-
-        x_hat = (inputs - self.beta) / torch.exp(self.log_gamma)
-        y = x_hat * var.sqrt() + mean
-        return y.reshape(inputs.shape[0],self.channel,self.size,self.size)
     
 class Res(nn.Module):
 
@@ -153,11 +77,11 @@ class Coupling(nn.Module):
         self.mask.requires_grad_(False)
         self.drop = 0
         self.alpha_net = nn.Sequential(
-            # Res(size=size,channel=channel,kernel_size=kernel_size),
+            Res(size=size,channel=channel,kernel_size=kernel_size),
             Res(size=size,channel=channel,kernel_size=kernel_size,activation=torch.tanh,with_mlp=True),
         )
         self.mu_net = nn.Sequential(
-            # Res(size=size,channel=channel,kernel_size=kernel_size),
+            Res(size=size,channel=channel,kernel_size=kernel_size),
             Res(size=size,channel=channel,kernel_size=kernel_size,activation=None,with_mlp=True),
         )
 
@@ -221,45 +145,39 @@ class Flow(nn.Module):
         self.channel = 1
 
         self.layer0 = nn.ModuleList([
-            # BatchNorm(size=28,channel=self.channel),
             Coupling(masktype='A',size=28,channel=self.channel),
-            BatchNorm(size=28,channel=self.channel),
-            # Coupling(masktype='B',size=28,channel=self.channel),
+            Coupling(masktype='B',size=28,channel=self.channel),
             # BatchNorm(size=28,channel=self.channel),
-            # Coupling(masktype='B',size=28,channel=self.channel),
             Squeeze(),
-            # Coupling(masktype='A',size=14,channel=4 * self.channel),
-            # Coupling(masktype='B',size=14,channel=4 * self.channel),
+            Coupling(masktype='B',size=14,channel=4 * self.channel),
+            Coupling(masktype='A',size=14,channel=4 * self.channel),
             # BatchNorm(size=14,channel=4*self.channel),
         ])
         self.prior = torch.distributions.Normal(torch.tensor([0.]).to(device),torch.tensor([1.]).to(device))
 
         self.layer1 = nn.ModuleList([
-            # BatchNorm(size=14,channel=2*self.channel),
-            # Coupling(masktype='A',size=14,channel=2 * self.channel),
-            # BatchNorm(size=14,channel=2*self.channel),
-            # Coupling(masktype='B',size=14,channel=2 * self.channel),
+            Coupling(masktype='A',size=14,channel=2 * self.channel),
+            Coupling(masktype='B',size=14,channel=2 * self.channel),
             # BatchNorm(size=14,channel=2*self.channel),
             Squeeze(),
-            # Coupling(masktype='A',size=7,channel=8 * self.channel),
-            # BatchNorm(size=7,channel=8*self.channel),
-            # Coupling(masktype='B',size=7,channel=8 * self.channel),
+            Coupling(masktype='B',size=7,channel=8 * self.channel),
+            Coupling(masktype='A',size=7,channel=8 * self.channel),
             # BatchNorm(size=7,channel=8*self.channel),
         ])
 
         self.layer2 = nn.ModuleList([
+            Coupling(masktype='A',size=7,channel=4 * self.channel),
             # BatchNorm(size=7,channel=4*self.channel),
-            # Coupling(masktype='A',size=7,channel=4 * self.channel),
-            # BatchNorm(size=7,channel=4*self.channel),
-            # Coupling(masktype='B',size=7,channel=4 * self.channel),
+            Coupling(masktype='B',size=7,channel=4 * self.channel),
             # BatchNorm(size=7,channel=4*self.channel),
         ])
 
         # self.layers = [self.layer0]
         self.layers = [self.layer0,self.layer1,self.layer2]
 
-    def forward(self,x):
-        x = self.pre_process(x)
+    def forward(self,x,pre_process=True):
+        if pre_process:
+            x = self.pre_process(x)
         batch = x.shape[0]
         logdet = 0
         zs = []
@@ -281,8 +199,8 @@ class Flow(nn.Module):
         latent = torch.cat([z.reshape(batch,-1) for z in zs],dim=-1) # isomorphic Gaussian
         return latent,logdet
     
-    def backward(self,z):
-        # z0: 14 * 14 * (2*self.channel), z1: 7 * 7 * (4*self.channel), x: 7 * 7 * (4*self.channel)
+    def backward(self,z,pre_process=True):
+        # # z0: 14 * 14 * (2*self.channel), z1: 7 * 7 * (4*self.channel), x: 7 * 7 * (4*self.channel)
         l1 = 14 * 14 * (2*self.channel)
         l2 = 7 * 7 * (4*self.channel)
         zs = [
@@ -297,17 +215,26 @@ class Flow(nn.Module):
             # print(f'layer {i}',z.shape)
             for layer in reversed(layeri):
                 z = layer.backward(z)
-
-        return self.inv_preprocess(z) # inverse action of pre_process
+        if pre_process:
+            return self.inv_preprocess(z) # inverse action of pre_process
+        else:
+            return z
+        #### One Layer Version ####
+        # z = z.reshape(-1,self.channel,28,28)
+        # for layer in reversed(self.layer0):
+        #     z = layer.backward(z)
+        # return self.inv_preprocess(z)
 
     def pre_process(self,x):
+        # return x
         return (x+1e-5).log() - (1-x+1e-5).log()
 
     def inv_preprocess(self,x):
+        # return x
         return x.sigmoid()
     
-    def get_loss(self,x):
-        latent,logdet = self(x)
+    def get_loss(self,x,pre_process=True):
+        latent,logdet = self(x,pre_process=pre_process)
         prior_logprob = self.prior.log_prob(latent).sum(dim=-1)
         loss = -(prior_logprob+logdet).mean(dim=0)
         return loss

@@ -5,7 +5,7 @@ parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 sys.path.append(parent_dir)
 
-import utils_2
+import utils
 
 from DDPM import DDPM
 from tqdm import tqdm
@@ -15,7 +15,7 @@ import torchvision.utils
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-mnist = utils_2.MNIST(batch_size=128)
+mnist = utils.MNIST(batch_size=128)
 train_loader = mnist.train_dataloader
 valid_loader = mnist.valid_dataloader
 T=100

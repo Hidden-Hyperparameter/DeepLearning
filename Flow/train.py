@@ -5,7 +5,7 @@ parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 sys.path.append(parent_dir)
 
-import utils_2
+import utils
 
 from tqdm import tqdm
 import torch
@@ -18,7 +18,7 @@ import numpy as np
 from model import Flow,device,float_tp
 
 
-mnist = utils_2.MNIST(batch_size=500)
+mnist = utils.MNIST(batch_size=500)
 train_loader = mnist.train_dataloader
 valid_loader = mnist.valid_dataloader
 
@@ -182,7 +182,8 @@ if __name__ == '__main__':
 
     model.to(device)
 
-    utils_2.count_parameters(model)
-    optimizer = torch.optim.Adam(model.parameters(),lr=1e-3,weight_decay=3e-5)
+    utils.count_parameters(model)
+    # optimizer = torch.optim.Adam(model.parameters(),lr=6e-5,weight_decay=5e-5)
+    optimizer = torch.optim.Adam(model.parameters(),lr=1e-3,weight_decay=5e-5)
     sample(model,save_dir=os.path.join('./samples',f'init.png'))
     train(100,model,optimizer,eval_interval=1)
