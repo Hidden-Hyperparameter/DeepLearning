@@ -55,12 +55,12 @@ Though the images aren't very clear, at least they *have some patterns*, the mos
 ## Then I realized why `pre_process` is important
 
 1. The actual log prob **should indeed be positive**. In coding project 3, the log prob is negative, but it is due to the `pre_process` (mentioned above), which contributes a logdet, but is ignored.
-2. Think: $\frac{|z|^2}{2}$ in the Gaussian log prob isn't very large (theoretically, just $d/2$, where $d=784$ is the dimension of $z$ and $x$). However, the log jacobian should be large:
+<!-- 2. Think: $\frac{|z|^2}{2}$ in the Gaussian log prob isn't very large (theoretically, just $d/2$, where $d=784$ is the dimension of $z$ and $x$). However, the log jacobian should be large:
     - $x$ takes volume $V\le 1$ in the 784-dim space. 
     - However, $z$ should be isotropic Gaussian, which takes an exponentially large volume in high dimensional space. (An estimation, by Gaussian Annulus Theorem, radius is around $\sqrt{d}$; let we pick the radius to be $0.9\sqrt{d}$ to $1.1\sqrt{d}$, which takes a considerable ratio of the mass, then it can be estimated as $0.2V_d\times (\sqrt{d})^{d} $, which turns out to be order of $(e\pi)^d$.)
     - Thus, $\log \det \frac{\partial z}{\partial x}$, which represents the change of volume, should be really large (modestly speaking, at least $d\sim 2d$.)
 
-Thus: without `pre_process`, the log prob will be positive. **The usage of `pre_process` is to extend the space that inputs take.** Why that helps the generation quality? I think maybe it is significantly harder for a model to train on the restricted space ($[0,1]^{d}$).
+Thus: without `pre_process`, the log prob will be positive. **The usage of `pre_process` is to extend the space that inputs take.** Why that helps the generation quality? I think maybe it is significantly harder for a model to train on the restricted space ($[0,1]^{d}$). -->
 
 (From another perspective, you can regard the `logits` of images as "real data", and using the image is equivalent to taking a `sigmoid` on real data. This will lead to gradient vanish in some cases.)
 

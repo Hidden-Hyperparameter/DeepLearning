@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.nn.modules.batchnorm import BatchNorm2d
 
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -92,8 +93,9 @@ class Coupling(nn.Module):
         z = mask * x + (1-mask) * [x * exp(alpha(mask*x)) + mu(mask*x)]
         """
         # print(x.shape)
-        alpha = torch.tanh(self.alpha_net(self.mask * x) + self.mask * x) # residual connection
-        mu = self.mu_net(self.mask * x) + self.mask * x
+        # alpha = torch.tanh(self.alpha_net(self.mask * x) + self.mask * x) # residual connection
+        alpha = self.alpha_net(self.mask * x) # residual connection
+        mu = self.mu_net(self.mask * x)
         # print(alpha.shape)
         ans = self.mask * x + x * torch.exp((1-self.mask) * alpha)*(1-self.mask) + mu * (1-self.mask)
         # print('alpha:',alpha*(1-self.mask))
@@ -102,12 +104,13 @@ class Coupling(nn.Module):
         # print((abs(ans)>3).float().mean())
         return ans,logdet
     
-    def backward(self,z):
+    def zhhbackward(self,z):
         """
         Used in generation, use z to calculate x
         """
-        mu = self.mu_net(self.mask * z) + self.mask * z
-        alpha = torch.tanh(self.alpha_net(self.mask * z) + self.mask * z)
+        mu = self.mu_net(self.mask * z)
+        # alpha = torch.tanh(self.alpha_net(self.mask * z) + self.mask * z)
+        alpha = self.alpha_net(self.mask * z)
         ans = z * self.mask + (1-self.mask) * (z * (1-self.mask) - mu) * torch.exp(-alpha)
         return ans
 
@@ -129,7 +132,7 @@ class Squeeze(nn.Module):
         return out,0
     
     @staticmethod
-    def backward(z):
+    def zhhbackward(z):
         x = torch.zeros(z.shape[0],z.shape[1]//4,z.shape[2]*2,z.shape[3]*2).to(device)
         x[...,::2,::2] = z[:,:(z.shape[1]//4),...]
         x[...,::2,1::2] = z[:,(z.shape[1]//4):(z.shape[1]//2),...]
@@ -148,10 +151,12 @@ class Flow(nn.Module):
             Coupling(masktype='A',size=28,channel=self.channel),
             Coupling(masktype='B',size=28,channel=self.channel),
             # BatchNorm(size=28,channel=self.channel),
+            BatchNorm2d(self.channel),
             Squeeze(),
             Coupling(masktype='B',size=14,channel=4 * self.channel),
             Coupling(masktype='A',size=14,channel=4 * self.channel),
             # BatchNorm(size=14,channel=4*self.channel),
+            BatchNorm2d(4*self.channel),
         ])
         self.prior = torch.distributions.Normal(torch.tensor([0.]).to(device),torch.tensor([1.]).to(device))
 
@@ -159,17 +164,21 @@ class Flow(nn.Module):
             Coupling(masktype='A',size=14,channel=2 * self.channel),
             Coupling(masktype='B',size=14,channel=2 * self.channel),
             # BatchNorm(size=14,channel=2*self.channel),
+            BatchNorm2d(2*self.channel),
             Squeeze(),
             Coupling(masktype='B',size=7,channel=8 * self.channel),
             Coupling(masktype='A',size=7,channel=8 * self.channel),
             # BatchNorm(size=7,channel=8*self.channel),
+            BatchNorm2d(8*self.channel),
         ])
 
         self.layer2 = nn.ModuleList([
             Coupling(masktype='A',size=7,channel=4 * self.channel),
             # BatchNorm(size=7,channel=4*self.channel),
+            BatchNorm2d(4*self.channel),
             Coupling(masktype='B',size=7,channel=4 * self.channel),
             # BatchNorm(size=7,channel=4*self.channel),
+            BatchNorm2d(4*self.channel),
         ])
 
         # self.layers = [self.layer0]
@@ -199,7 +208,7 @@ class Flow(nn.Module):
         latent = torch.cat([z.reshape(batch,-1) for z in zs],dim=-1) # isomorphic Gaussian
         return latent,logdet
     
-    def backward(self,z,pre_process=True):
+    def zhhbackward(self,z,pre_process=True):
         # # z0: 14 * 14 * (2*self.channel), z1: 7 * 7 * (4*self.channel), x: 7 * 7 * (4*self.channel)
         l1 = 14 * 14 * (2*self.channel)
         l2 = 7 * 7 * (4*self.channel)
@@ -214,7 +223,7 @@ class Flow(nn.Module):
                 z = torch.cat([zs[i],z],dim=1)
             # print(f'layer {i}',z.shape)
             for layer in reversed(layeri):
-                z = layer.backward(z)
+                z = layer.zhhbackward(z)
         if pre_process:
             return self.inv_preprocess(z) # inverse action of pre_process
         else:
