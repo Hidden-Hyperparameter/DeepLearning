@@ -78,5 +78,6 @@ def count_parameters(model):
 
 
 def save_figure(path,image:torch.Tensor,nrow=16,):
+    os.makedirs(os.path.dirname(path),exist_ok=True)
     grid = torchvision.utils.make_grid(image.reshape(-1,1,28,28).cpu(), nrow=nrow)
     torchvision.utils.save_image(grid, path)
