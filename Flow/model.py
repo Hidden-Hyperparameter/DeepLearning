@@ -151,12 +151,12 @@ class Flow(nn.Module):
             Coupling(masktype='A',size=28,channel=self.channel),
             Coupling(masktype='B',size=28,channel=self.channel),
             # BatchNorm(size=28,channel=self.channel),
-            BatchNorm2d(self.channel),
+            # BatchNorm2d(self.channel),
             Squeeze(),
             Coupling(masktype='B',size=14,channel=4 * self.channel),
             Coupling(masktype='A',size=14,channel=4 * self.channel),
             # BatchNorm(size=14,channel=4*self.channel),
-            BatchNorm2d(4*self.channel),
+            # BatchNorm2d(4*self.channel),
         ])
         self.prior = torch.distributions.Normal(torch.tensor([0.]).to(device),torch.tensor([1.]).to(device))
 
@@ -164,21 +164,21 @@ class Flow(nn.Module):
             Coupling(masktype='A',size=14,channel=2 * self.channel),
             Coupling(masktype='B',size=14,channel=2 * self.channel),
             # BatchNorm(size=14,channel=2*self.channel),
-            BatchNorm2d(2*self.channel),
+            # BatchNorm2d(2*self.channel),
             Squeeze(),
             Coupling(masktype='B',size=7,channel=8 * self.channel),
             Coupling(masktype='A',size=7,channel=8 * self.channel),
             # BatchNorm(size=7,channel=8*self.channel),
-            BatchNorm2d(8*self.channel),
+            # BatchNorm2d(8*self.channel),
         ])
 
         self.layer2 = nn.ModuleList([
             Coupling(masktype='A',size=7,channel=4 * self.channel),
             # BatchNorm(size=7,channel=4*self.channel),
-            BatchNorm2d(4*self.channel),
+            # BatchNorm2d(4*self.channel),
             Coupling(masktype='B',size=7,channel=4 * self.channel),
             # BatchNorm(size=7,channel=4*self.channel),
-            BatchNorm2d(4*self.channel),
+            # BatchNorm2d(4*self.channel),
         ])
 
         # self.layers = [self.layer0]
