@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.nn.modules.batchnorm import BatchNorm2d
+# from torch.nn.modules.batchnorm import BatchNorm2d
 
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -104,7 +104,7 @@ class Coupling(nn.Module):
         # print((abs(ans)>3).float().mean())
         return ans,logdet
     
-    def zhhbackward(self,z):
+    def z_to_x(self,z):
         """
         Used in generation, use z to calculate x
         """
@@ -132,7 +132,7 @@ class Squeeze(nn.Module):
         return out,0
     
     @staticmethod
-    def zhhbackward(z):
+    def z_to_x(z):
         x = torch.zeros(z.shape[0],z.shape[1]//4,z.shape[2]*2,z.shape[3]*2).to(device)
         x[...,::2,::2] = z[:,:(z.shape[1]//4),...]
         x[...,::2,1::2] = z[:,(z.shape[1]//4):(z.shape[1]//2),...]
@@ -208,7 +208,7 @@ class Flow(nn.Module):
         latent = torch.cat([z.reshape(batch,-1) for z in zs],dim=-1) # isomorphic Gaussian
         return latent,logdet
     
-    def zhhbackward(self,z,pre_process=True):
+    def z_to_x(self,z,pre_process=True):
         # # z0: 14 * 14 * (2*self.channel), z1: 7 * 7 * (4*self.channel), x: 7 * 7 * (4*self.channel)
         l1 = 14 * 14 * (2*self.channel)
         l2 = 7 * 7 * (4*self.channel)
@@ -223,7 +223,7 @@ class Flow(nn.Module):
                 z = torch.cat([zs[i],z],dim=1)
             # print(f'layer {i}',z.shape)
             for layer in reversed(layeri):
-                z = layer.zhhbackward(z)
+                z = layer.z_to_x(z)
         if pre_process:
             return self.inv_preprocess(z) # inverse action of pre_process
         else:

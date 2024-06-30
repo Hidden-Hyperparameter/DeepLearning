@@ -27,7 +27,7 @@ valid_loader = mnist.valid_dataloader
 def sample(model,save_dir):
     model.eval()
     hiddens = torch.randn([100,784]).to(device).to(float_tp)
-    outs = model.zhhbackward(hiddens)
+    outs = model.z_to_x(hiddens)
     # use torchvision to display 100 figures in 10 * 10 grid
     grid = torchvision.utils.make_grid(outs.reshape(-1,1,28,28).cpu(), nrow=10)
     torchvision.utils.save_image(grid, save_dir)
@@ -62,7 +62,7 @@ def train(epochs,model,optimizer,eval_interval=1):
                     bar.set_description(f'Epoch: {epoch} [Valid]Loss: {sum(losses)/len(losses)}')
 
         z,logdet = model(x)
-        rec = model.zhhbackward(z)
+        rec = model.z_to_x(z)
         grid = torchvision.utils.make_grid(rec.reshape(-1,1,28,28).cpu(), nrow=32)
         torchvision.utils.save_image(grid, os.path.join('./samples',f'rec_valid_epoch_{epoch}.png'))
         
