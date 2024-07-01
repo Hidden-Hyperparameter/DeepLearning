@@ -1,4 +1,5 @@
-from model import Flow,device
+from model import Flow
+device = 'cuda'
 from train import valid_loader
 import torch,torchvision,os
 from tqdm import tqdm
@@ -21,13 +22,15 @@ def gen_corrpted_sample(level=0.3) -> torch.Tensor:
     x_c = x_c.clamp(0,1)
 
     grid = torchvision.utils.make_grid(x_c.reshape(-1,1,28,28).cpu(), nrow=N)
+    if not os.path.exists('./impainting'):
+        os.makedirs('./impainting')
     torchvision.utils.save_image(grid,os.path.join('./impainting',f'corrupted_level{level}.png'))
     grid = torchvision.utils.make_grid(x.reshape(-1,1,28,28).cpu(), nrow=N)
     torchvision.utils.save_image(grid,os.path.join('./impainting',f'ground_truth.png'))
     print('corrption MSE:',mse_loss(x,x_c).item())
     return x,x_c,rnd_mask
 
-def impainting(model:Flow,steps=10000,lr=0.1,max_norm=5):
+def impainting(model:Flow,steps=10000,lr=0.1,max_norm=50):
     model.eval()
     # model.train()
     truth,x,mask = gen_corrpted_sample()
@@ -38,34 +41,35 @@ def impainting(model:Flow,steps=10000,lr=0.1,max_norm=5):
     # x_for_calc = x.clone().detach()
     # opt = torch.optim.Adam([x_for_calc],lr=lr)
     # opt.zero_grad()
+    print(x_for_calc.shape)
+    up, down = x_for_calc[:,:,:14,:],x_for_calc[:,:,14:,:]
+    up.requires_grad_(True)
+    down.requires_grad_(True)
+    optim = torch.optim.Adam([down],lr=lr)
     with tqdm(range(steps)) as bar:
         for step in bar:
-            # opt.zero_grad()
-            x_for_calc.requires_grad_(True)
-            x_for_calc.grad = torch.zeros_like(x_for_calc)
-            old = x_for_calc.clone()
-            loss = model.get_loss(x_for_calc,pre_process=False) # negative log likelihood
+            # temp = x_for_calc.clone()
+            optim.zero_grad()
+            # x_for_calc.requires_grad_(True)
+            total = torch.cat([up,down],dim=2)
+            loss = model.get_loss(total,pre_process=False)
             loss.backward()
-            grad = x_for_calc.grad.reshape(x.shape[0],-1)
-            grad_norm = grad.norm(dim=-1,keepdim=True).clamp(max_norm,1e5)
-            grad /= (grad_norm/max_norm)    
-            x_for_calc.grad = grad.reshape_as(x_for_calc)     
-            # opt.step()
-            x_for_calc = (x_for_calc - lr * x_for_calc.grad) * (1-mask) + x_for_calc * mask
-            x_for_calc = x_for_calc.clamp(-20,20).clone().detach()
+            # print(x_for_calc[:,:,14:,:].grad.norm())
+            optim.step()
             # print(torch.nn.functional.mse_loss(x_for_calc,old).item())
-            x = torch.sigmoid(x_for_calc).clone().detach()
+            total = torch.cat([up,down],dim=2)
+            x = torch.sigmoid(total).clone().detach()
             mse = mse_loss(x,truth)
             bar.set_description(f'[Impainting], step {step}, mse loss {mse.item()}, log prob {-loss.item()}')
             # if step > 10:
                 # exit()
             # time.sleep(0.5)
-            if (step+1) % 100 == 0:
+            if (step+1) % 10 == 0:
                 grid = torchvision.utils.make_grid(x.reshape(-1,1,28,28).cpu(), nrow=5)
                 torchvision.utils.save_image(grid,os.path.join('./impainting',f'rec_step_{step}.png'))
 
 if __name__ == '__main__':
-    model = torch.load('./samples/epoch_77.pt').to(device)
+    model = torch.load('./samples/epoch_38.pt').to(device)
     model.requires_grad_(False)
     # model.eval()
     impainting(model)
