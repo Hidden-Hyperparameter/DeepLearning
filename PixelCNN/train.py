@@ -25,16 +25,17 @@ valid_loader = mnist.valid_dataloader
 
 
 @torch.no_grad()
-def sample(model:PixelCNN,save_dir):
+def sample(model:PixelCNN | GatedPixelCNN,save_dir):
     model.eval()
-    imgs = model.sample(100)
+    imgs = model.sample(batch=100)
     utils.save_figure(
         path=save_dir,
         image=imgs,
         nrow=10,
     )
 
-def show_reception_field(model):
+def visualize(model):
+    """used to debug, avoid model cheating"""
     model.eval()
     x = torch.zeros(1,1,28,28).to(device)
     x.requires_grad = True
@@ -42,8 +43,9 @@ def show_reception_field(model):
     y[...,14,14].sum().backward()
     # show heatmap
     heatmap = ((x.grad[0,0,...].abs()>1e-4).float()*0.5).cpu().numpy()
-    heatmap[14,14]=1
     plt.imshow(heatmap,cmap='hot')
+    # plot a star at (2,2)
+    plt.scatter(14,14,c='blue',marker='*',s=100)
     # save heatmap
     plt.savefig('./heatmap.png')
 
@@ -59,16 +61,17 @@ dic = {
 }
 
 if __name__ == '__main__':
+    # choice = 'PixelCNN'
     choice = 'GatedPixelCNN'
     model = dic[choice]['model']()
     model.to(device)
     utils.count_parameters(model)
     info = {
         'lr':1e-3,
-        'weight_decay':3e-5,
+        'weight_decay':1e-4,
     }
     optimizer = torch.optim.Adam(model.parameters(),**info)
     print('optimizer info:',info)
-    # sample(model,save_dir=os.path.join('./samples',f'init.png'))
-    show_reception_field(model)
+    sample(model,save_dir=os.path.join(f'./samples_{choice}',f'init.png'))
+    # visualize(model); exit()
     train(100,model,optimizer,eval_interval=1,sample_func=sample,train_loader=train_loader,valid_loader=valid_loader,save_dir=f'./samples_{choice}',conditional=dic[choice]['conditional'])

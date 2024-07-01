@@ -84,7 +84,10 @@ def save_figure(path,image:torch.Tensor,nrow=16,):
     torchvision.utils.save_image(grid, path)
 
 def train_generative_model(epochs,model,optimizer,sample_func,conditional=False,eval_interval=1,save_model=False,train_loader=None,valid_loader=None,save_dir='./samples'):
-    device = model.device
+    try:
+        device = model.device
+    except AttributeError:
+        device = 'cuda' if torch.cuda.is_available() else 'cpu'
     if train_loader is None:
         mnist = MNIST(batch_size=256)
         train_loader = mnist.train_dataloader

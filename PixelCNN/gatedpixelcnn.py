@@ -13,7 +13,7 @@ class VerticalConv(MaskedConv2d):
         # print('overloading make_mask successful')
         assert kernel_size%2==1
         twod = torch.zeros(kernel_size,kernel_size)
-        twod[:,:(kernel_size//2)] = 1
+        twod[:(kernel_size//2)+1,:] = 1
         return twod.expand(1,in_channels,kernel_size,kernel_size).to(device)
     
 class HorizontalConv(MaskedConv2d):
@@ -24,7 +24,10 @@ class HorizontalConv(MaskedConv2d):
         assert masktype in 'AB'
         assert kernel_size%2==1
         twod = torch.zeros(kernel_size,kernel_size)
-        twod[(kernel_size-1)//2,:(kernel_size+1)//2] = 1
+        if masktype == 'A':
+            twod[(kernel_size-1)//2,:(kernel_size-1)//2] = 1
+        else:
+            twod[(kernel_size-1)//2,:(kernel_size+1)//2] = 1
         return twod.expand(1,in_channels,kernel_size,kernel_size).to(device)
     
 class GatedConvLayer(nn.Module):
@@ -50,11 +53,16 @@ class GatedConvLayer(nn.Module):
             )
         self.out_channels = out_channels
         self.bn = nn.BatchNorm2d(out_channels*2)
+
+        self.apply_res = False # see note.md, residual connection isn't very useful.
+        # self.apply_res = not(masktype == 'A' and convtype == 'H')
+
         self.linear = nn.Linear(10,out_channels*2) # as mentioned in the paper, the encode of label h doesn't specify "where" to have the feature, so this is independent of pixel position.
 
     def forward(self,x,h):
         """perform conditioal generation with h being the one-hot label information"""
         batch = x.shape[0]
+        xc = x.clone()
         x = self.maskedconv(x)
         x = self.bn(x)
         h_embedded = self.linear(h)
@@ -62,22 +70,33 @@ class GatedConvLayer(nn.Module):
         x_second = x[:,self.out_channels:]
         h_first = h_embedded[:,:self.out_channels] # (batch, out_channel)
         h_second = h_embedded[:,self.out_channels:]
-        return torch.tanh(x_first + h_first.reshape(batch,self.out_channels,1,1)) * torch.sigmoid(x_second + h_second.reshape(batch,self.out_channels,1,1)) # gated activation
+        out = torch.tanh(x_first + h_first.reshape(batch,self.out_channels,1,1)) * torch.sigmoid(x_second + h_second.reshape(batch,self.out_channels,1,1)) # gated activation
+
+        # if not type A, can have residual connection'
+        if self.apply_res:
+            return out + xc
+        else:
+            return out
     
 class GatedPixelCNN(nn.Module):
 
     def __init__(self):
         super().__init__()
         self.vertical_stack = nn.ModuleList([
-            GatedConvLayer(in_channels=1,out_channels=64,kernel_size=7,convtype='V',masktype='A'),
+            GatedConvLayer(in_channels=1,out_channels=64,kernel_size=7,convtype='V',masktype='B'),
         ] + [
-            GatedConvLayer(in_channels=64,out_channels=64,kernel_size=7,convtype='V',masktype='B') for _ in range(6)
+            GatedConvLayer(in_channels=64,out_channels=64,kernel_size=7,convtype='V',masktype='B') for _ in range(5)
         ])
         self.horizontal_stack = nn.ModuleList([
             GatedConvLayer(in_channels=64,out_channels=64,kernel_size=7,convtype='H',masktype='A'),
         ] + [
-            GatedConvLayer(in_channels=64,out_channels=64,kernel_size=7,convtype='H',masktype='B') for _ in range(6)
+            GatedConvLayer(in_channels=64,out_channels=64,kernel_size=7,convtype='H',masktype='B') for _ in range(5)
         ])
+        self.out_proj = nn.Sequential(
+            nn.Conv2d(in_channels=64,out_channels=128,kernel_size=1),
+            nn.ReLU(),
+            nn.Conv2d(in_channels=128,out_channels=256,kernel_size=1),
+        )
     
     def forward(self,x,h):
         h = F.one_hot(h.to(torch.long),num_classes=10).float()
@@ -87,11 +106,12 @@ class GatedPixelCNN(nn.Module):
             y = layer(y,h)
             # add the shift-downward image into the list
             ys.append(torch.cat(
-                (torch.zeros(y.shape[0],y.shape[1],1,28),y[...,:-1,:]),dim=2
+                (torch.zeros(y.shape[0],y.shape[1],1,28).to(device),y[...,:-1,:]),dim=2
             ))
         for i,layer in enumerate(self.horizontal_stack):
             x = x + ys[i]
             x = layer(x,h)
+        x = self.out_proj(x)
         return x
     
     def get_loss(self,x,h):
@@ -106,6 +126,7 @@ class GatedPixelCNN(nn.Module):
 
     @torch.no_grad()
     def sample(self,batch=1):
+        self.eval()
         out = torch.zeros(batch,1,28,28).to(device)
         label = torch.arange(10).repeat(batch//10)[:batch].to(device)
         for i in tqdm.trange(28,desc='Generation'):

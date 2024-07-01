@@ -2,6 +2,11 @@
 **/data
 **/samples
 */log.log
+*/nohup.out
+
+# Flow
 Flow/impainting
 Flow/play
-*/nohup.out
+
+# PixelCNN
+PixelCNN/samples*
