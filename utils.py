@@ -1,6 +1,7 @@
 import torch,torchvision
 from torchvision import datasets, transforms
 import os
+from tqdm import tqdm
 torch.manual_seed(42)
 torch.cuda.manual_seed(42)
 torch.backends.cudnn.deterministic = True
@@ -81,3 +82,45 @@ def save_figure(path,image:torch.Tensor,nrow=16,):
     os.makedirs(os.path.dirname(path),exist_ok=True)
     grid = torchvision.utils.make_grid(image.reshape(-1,1,28,28).cpu(), nrow=nrow)
     torchvision.utils.save_image(grid, path)
+
+def train_generative_model(epochs,model,optimizer,sample_func,conditional=False,eval_interval=1,save_model=False,train_loader=None,valid_loader=None,save_dir='./samples'):
+    device = model.device
+    if train_loader is None:
+        mnist = MNIST(batch_size=256)
+        train_loader = mnist.train_dataloader
+        valid_loader = mnist.valid_dataloader
+    assert valid_loader is not None
+
+    for epoch in range(epochs):
+        losses = []
+        model.train()
+        with tqdm(train_loader) as bar:
+            for x,y in bar:
+                x = x.to(device); y = y.to(device)
+                if conditional:
+                    loss = model.get_loss(x,y)
+                else:
+                    loss = model.get_loss(x)
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
+                losses.append(loss.item())
+                bar.set_description(f'Epoch: {epoch} Loss: {sum(losses)/len(losses)}')
+       
+        losses = []
+        model.eval()
+        with torch.no_grad():
+            with tqdm(valid_loader) as bar:
+                for x,y in bar:
+                    x = x.to(device); y = y.to(device)
+                    if conditional:
+                        loss = model.get_loss(x,y)
+                    else:
+                        loss = model.get_loss(x)
+                    losses.append(loss.item())
+                    bar.set_description(f'Epoch: {epoch} [Valid]Loss: {sum(losses)/len(losses)}')
+
+        if (epoch+1) % eval_interval == 0:
+            sample_func(model,save_dir=os.path.join(save_dir,f'epoch_{epoch}.png'))
+            if save_model:
+                torch.save(model,os.path.join(save_dir,f'epoch_{epoch}.pt'))
