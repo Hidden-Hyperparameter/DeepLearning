@@ -126,8 +126,14 @@ With the change, I can get the generation result like:
 
 ![](./assets/3.png)
 
-well.. only slightly better. However, the impainting has a significant improvement! I first observed that the log prob can be optimized more easily. Then with the aid of `Adam` optimizer, I finally get the following impainting result (compared with the previous corrupted and ground truth images):
+well.. only slightly better. However, the impainting has a significant improvement! I first observed that the log prob can be optimized more easily. Then with the aid of `Adam` optimizer, I finally get the following impainting result (with the same corrupted and ground truth images as previous):
 
 ![](./assets/corrupted.png)
 ![](./assets/new_rec.png)
 ![](./assets/ground_truth.png)
+
+With enough time of impainting, the final result can be like
+
+![](./assets/rec_new.jpeg)
+
+This has less than half of the mse for corrupted image.

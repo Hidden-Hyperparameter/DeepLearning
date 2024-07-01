@@ -1,5 +1,4 @@
-from model import Flow
-device = 'cuda'
+from model import Flow,device
 from train import valid_loader
 import torch,torchvision,os
 from tqdm import tqdm
@@ -34,15 +33,10 @@ def impainting(model:Flow,steps=10000,lr=0.1,max_norm=50):
     model.eval()
     truth,x,mask = gen_corrpted_sample()
     x_for_calc = model.pre_process(x)
-    x_for_calc.requires_grad_(True)
-    opt = torch.optim.Adam([x_for_calc],lr=lr)
     with torch.no_grad():
         print('original log prob:',-model.get_loss(truth).item())
         print('corrption log prob:',-model.get_loss(x).item())
-    # x_for_calc = x.clone().detach()
-    # opt = torch.optim.Adam([x_for_calc],lr=lr)
-    # opt.zero_grad()
-    print(x_for_calc.shape)
+    # print(x_for_calc.shape)
     up, down = x_for_calc[:,:,:14,:],x_for_calc[:,:,14:,:]
     up.requires_grad_(True)
     down.requires_grad_(True)
