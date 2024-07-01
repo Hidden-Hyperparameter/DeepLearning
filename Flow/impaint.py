@@ -32,9 +32,10 @@ def gen_corrpted_sample(level=0.3) -> torch.Tensor:
 
 def impainting(model:Flow,steps=10000,lr=0.1,max_norm=50):
     model.eval()
-    # model.train()
     truth,x,mask = gen_corrpted_sample()
-    x_for_calc = (x+1e-5).log()-(1-x+1e-5).log()
+    x_for_calc = model.pre_process(x)
+    x_for_calc.requires_grad_(True)
+    opt = torch.optim.Adam([x_for_calc],lr=lr)
     with torch.no_grad():
         print('original log prob:',-model.get_loss(truth).item())
         print('corrption log prob:',-model.get_loss(x).item())

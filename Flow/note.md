@@ -1,6 +1,6 @@
 # Note
 
-I failed in this model. So don't reference much from this note.
+This trial is not very good. So don't reference much from this note when writing flow for (maybe) the next time.
 
 # Flow
 
@@ -55,12 +55,13 @@ Though the images aren't very clear, at least they *have some patterns*, the mos
 ## Then I realized why `pre_process` is important
 
 1. The actual log prob **should indeed be positive**. In coding project 3, the log prob is negative, but it is due to the `pre_process` (mentioned above), which contributes a logdet, but is ignored.
-<!-- 2. Think: $\frac{|z|^2}{2}$ in the Gaussian log prob isn't very large (theoretically, just $d/2$, where $d=784$ is the dimension of $z$ and $x$). However, the log jacobian should be large:
+2. Think: $\frac{|z|^2}{2}$ in the Gaussian log prob isn't very large (theoretically, just $d/2$, where $d=784$ is the dimension of $z$ and $x$). However, the log jacobian should be large:
     - $x$ takes volume $V\le 1$ in the 784-dim space. 
     - However, $z$ should be isotropic Gaussian, which takes an exponentially large volume in high dimensional space. (An estimation, by Gaussian Annulus Theorem, radius is around $\sqrt{d}$; let we pick the radius to be $0.9\sqrt{d}$ to $1.1\sqrt{d}$, which takes a considerable ratio of the mass, then it can be estimated as $0.2V_d\times (\sqrt{d})^{d} $, which turns out to be order of $(e\pi)^d$.)
     - Thus, $\log \det \frac{\partial z}{\partial x}$, which represents the change of volume, should be really large (modestly speaking, at least $d\sim 2d$.)
+    - Maybe this is not mathematical rigorous, but it gives some sense.
 
-Thus: without `pre_process`, the log prob will be positive. **The usage of `pre_process` is to extend the space that inputs take.** Why that helps the generation quality? I think maybe it is significantly harder for a model to train on the restricted space ($[0,1]^{d}$). -->
+Thus: without `pre_process`, the log prob will be positive. **The usage of `pre_process` is to extend the space that inputs take.** Why that helps the generation quality? I think maybe it is significantly harder for a model to train on the restricted space ($[0,1]^{d}$).
 
 (From another perspective, you can regard the `logits` of images as "real data", and using the image is equivalent to taking a `sigmoid` on real data. This will lead to gradient vanish in some cases.)
 
@@ -113,6 +114,20 @@ I can't exactly tell why my model is worse than CP3 when it comes to impainting.
 
 Thus, I believe that the problem of our current model is that **the log-prob function of it is too complex to optimize**. This may be due to the large number of parameters and the depth of the model.
 
-## Conclusion
+## Conclusion ...?
 
 I think this trial of flow model as a **failure**. For a better performance, **the structure of CP3 should be used**, which can get good generations with less parameters, and yield better impainting results.
+
+## But [Luyy](https://github.com/Lyy-iiis) helped me to find the bug
+
+See commit 2ef675c, I apply `tanh` and residual connection twice unintentionally. This isn't a serious bug, since the `log_det` and backward pass are all not harmed. However, this somehow matters.
+
+With the change, I can get the generation result like:
+
+![](./assets/3.png)
+
+well.. only slightly better. However, the impainting has a significant improvement! I first observed that the log prob can be optimized more easily. Then with the aid of `Adam` optimizer, I finally get the following impainting result (compared with the previous corrupted and ground truth images):
+
+![](./assets/corrupted.png)
+![](./assets/new_rec.png)
+![](./assets/ground_truth.png)
