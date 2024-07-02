@@ -47,16 +47,17 @@ class Dictionary:
             if not hasattr(self,'save_path'):
                 raise ValueError('save path not specified')
             path = self.save_path
-        l = [(times,word) for word,times in self.vocab.items()]
-        l = sorted(l[:self.max_size],reverse=True)
-        self.vocab = {word:idx for idx,(_,word) in enumerate(l)}
-        self.finish_init()
-        json.dump(self.vocab, open(path, 'w'))
+        if not self.init_finished:
+            l = [(times,word) for word,times in self.vocab.items()]
+            l = sorted(l[:self.max_size],reverse=True)
+            self.vocab = {word:idx for idx,(_,word) in enumerate(l)}
+            self.finish_init()
+        json.dump(self.vocab, open(path, 'w'),indent=4)
 
     def load(self,path=None):
         self.vocab = json.load(open(path, 'r'))
         if len(self.vocab)>self.max_size:
-            self.vocab = {word:ind for word,ind in self.vocab if ind<self.max_size}
+            self.vocab = {word:ind for word,ind in self.vocab.items() if ind<self.max_size}
             assert all([x in self.vocab for x in ['<pad>','<bos>','<eos>','<unk>']]),'Invalid dictionary file'
         self.finish_init()
     
@@ -93,15 +94,19 @@ class ZH_Dictionary(Dictionary):
             if not hasattr(self,'save_path'):
                 raise ValueError('save path not specified')
             path = self.save_path
-        l = [(times,word) for word,times in self.vocab.items()]
-        l = sorted(l[:self.max_size],reverse=True)
-        self.vocab = {word:idx for idx,(_,word) in enumerate(l)}
-        self.finish_init()
-        json.dump(self.vocab, open(path, 'w',encoding='utf-8'),ensure_ascii=False)
+        if not self.init_finished:
+            l = [(times,word) for word,times in self.vocab.items()]
+            l = sorted(l[:self.max_size],reverse=True)
+            self.vocab = {word:idx for idx,(_,word) in enumerate(l)}
+            self.finish_init()
+        json.dump(self.vocab, open(path, 'w',encoding='utf-8'),ensure_ascii=False,indent=4)
 
     def load(self,path=None):
         with open(path, 'r', encoding='utf-8') as f:
             self.vocab = json.load(f)
+        if len(self.vocab)>self.max_size:
+            self.vocab = {word:ind for word,ind in self.vocab.items() if ind<self.max_size}
+            assert all([x in self.vocab for x in ['<pad>','<bos>','<eos>','<unk>']]),'Invalid dictionary file'
         self.finish_init()
 
     def decode_ln(self,indices):
@@ -122,14 +127,16 @@ class EN_Dictionary(Dictionary):
 
 class WMT19Dataset(Dataset):
 
-    def __init__(self,dataset:datasets.arrow_dataset.Dataset,load=False,en_dict = None,zh_dict = None):
+    def __init__(self,dataset:datasets.arrow_dataset.Dataset,load=False,en_dict = None,zh_dict = None,vocab_size=20000,pick_num=None):
+        if pick_num is not None:
+            dataset = dataset.select(range(pick_num))
         self.dataset = dataset
         if load:
             print('Using preloaded dictionary.')
-            en_dict = EN_Dictionary()
+            en_dict = EN_Dictionary(max_size=vocab_size)
             en_dict.load(en_dict.save_path)
             self.en_dict = en_dict
-            zh_dict = ZH_Dictionary()
+            zh_dict = ZH_Dictionary(max_size=vocab_size)
             zh_dict.load(zh_dict.save_path)
             self.zh_dict = zh_dict
             return
@@ -176,7 +183,7 @@ class WMT19DataLoader(DataLoader):
 
 class WMT19:
 
-    def __init__(self,batch_size=32) -> None:
+    def __init__(self,batch_size=32,vocab_size=20000) -> None:
         assert os.path.exists('../data/wmt19'),'Please download the dataset at https://huggingface.co/datasets/wmt/wmt19/tree/main/zh-en'
         data_files = {
             "train": ["../data/wmt19/train-000{:02d}-of-00013.parquet".format(i) for i in range(13)],
@@ -185,8 +192,8 @@ class WMT19:
         wmt19 = load_dataset('parquet', data_files=data_files)
         print('WMT19 loaded. train dataset len:', len(wmt19['train']))
         # raise NotImplementedError()
-        self.train_dataset = WMT19Dataset(wmt19['train'],load=True)
-        self.valid_dataset = WMT19Dataset(wmt19['validation'],en_dict=self.train_dataset.en_dict,zh_dict=self.train_dataset.zh_dict)
+        self.train_dataset = WMT19Dataset(wmt19['train'],load=True,vocab_size=vocab_size)
+        self.valid_dataset = WMT19Dataset(wmt19['validation'],en_dict=self.train_dataset.en_dict,zh_dict=self.train_dataset.zh_dict,vocab_size=vocab_size,pick_num=1000)
         self.train_dataloader = WMT19DataLoader(self.train_dataset,batch_size=batch_size)
         self.valid_dataloader = WMT19DataLoader(self.valid_dataset,batch_size=batch_size)
         self.src_dict = self.train_dataset.en_dict
@@ -200,8 +207,15 @@ class WMT19:
         else:
             return self.train_dataset.zh_dict.decode_ln(indices)
 
-# if __name__ == '__main__':
-#     wmt19 = WMT19()
-#     train_dl = wmt19.train_dataloader
-#     valid_dl = wmt19.valid_dataloader
-#     en,zh = next(iter(train_dl))
+if __name__ == '__main__':
+    # wmt19 = WMT19()
+    # train_dl = wmt19.train_dataloader
+    # valid_dl = wmt19.valid_dataloader
+    # en,zh = next(iter(train_dl))
+    zh_dict = ZH_Dictionary(max_size=20000)
+    zh_dict.load('../data/zh_dict_max50000.json')
+    zh_dict.save('../data/zh_dict_max20000.json')
+
+    en_dict = EN_Dictionary(max_size=20000)
+    en_dict.load('../data/en_dict_max50000.json')
+    en_dict.save('../data/en_dict_max20000.json')

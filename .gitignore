@@ -4,6 +4,7 @@
 */log.log
 */nohup.out
 data.tar.gz
+mnist_data/
 
 # Flow
 Flow/impainting

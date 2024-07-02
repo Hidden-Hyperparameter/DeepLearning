@@ -1,8 +1,8 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-device = 'cpu'
-# device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+# device = 'cpu'
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 class Attention(nn.Module):
 
@@ -42,15 +42,15 @@ class SinousPositionalEmbedding(nn.Module):
     def __init__(self,size):
         super().__init__()
         self.register_buffer(
-            'fractions',10000**(torch.arange(0,size,2)/size),
+            'fractions',10000**(torch.arange(0,size,2)/size).to(device),
             persistent=False
         )
 
     @torch.no_grad()
     def forward(self,x):
         batch,leng,embed_dim = x.shape
-        angles = self.fractions.reshape(1,-1) * torch.arange(leng).reshape(-1,1) # (leng, size/2)
-        out = torch.zeros(leng,embed_dim)
+        angles = self.fractions.reshape(1,-1) * torch.arange(leng).to(device).reshape(-1,1) # (leng, size/2)
+        out = torch.zeros(leng,embed_dim).to(device)
         out[:,::2] = torch.sin(angles)
         out[:,1::2] = torch.cos(angles)
         return out.expand(batch,*out.shape)
@@ -134,10 +134,10 @@ class Transformer(nn.Module):
     def __init__(self,
         src_vocab_size,tgt_vocab_size,
         src_pad_index,tgt_pad_index,bos_index,eos_index,
-        embedding_dim = 512,
-        hidden_dim = 512,
+        embedding_dim = 256,
+        hidden_dim = 256,
         num_heads = 8,
-        num_layers = 6,
+        num_layers = 2,
     ):
         super().__init__()
         self.src_embedding = nn.Embedding(num_embeddings=src_vocab_size,embedding_dim=embedding_dim)
@@ -169,17 +169,22 @@ class Transformer(nn.Module):
     def make_encoder_mask(src,pad_index):
         """mask out all padding tokens in src"""
         batch,leng = src.shape[:2]
-        mask = torch.zeros([batch,leng,leng])
+        mask = torch.zeros([batch,leng,leng]).to(device)
         is_pad = (src==pad_index).float().reshape(batch,1,leng).expand(batch,leng,leng)
         mask += is_pad * (-1e6)
-        return mask
+        return mask # [batch,leng,leng]
 
     @staticmethod
-    def make_decoder_mask(tgt,pad_index):
+    def make_decoder_mask(src,src_pad_index,tgt,tgt_pad_index):
         """mask out all padding tokens in tgt, and make causal mask"""
-        pad_mask = Transformer.make_encoder_mask(tgt,pad_index)
-        causal_mask = torch.tril(torch.ones([tgt.shape[1],tgt.shape[1]])).float() # i>j is 1, other 0
+        tgt_leng = tgt.shape[1]
+        enc_mask = Transformer.make_encoder_mask(src,src_pad_index)
+        src_mask = enc_mask[:,:1,:].expand(tgt.shape[0],tgt_leng,src.shape[-1])
+
+        pad_mask = Transformer.make_encoder_mask(tgt,tgt_pad_index)
+        causal_mask = torch.tril(torch.ones([tgt.shape[1],tgt.shape[1]]).to(device)).float() # i>j is 1, other 0
         causal_mask = (1-causal_mask)*(-1e6)
+        return pad_mask,causal_mask,src_mask
 
     def forward(self,src,tgt):
         """inputs: src all indices tensor, batched, have padding"""
@@ -191,28 +196,41 @@ class Transformer(nn.Module):
             x = layer(x,mask=enc_mask)
             x_list.append(x.clone())
         
-        dec_mask = self.make_decoder_mask(tgt,self.tgt_pad_index)
+        pad_mask,causal_mask,context_mask = self.make_decoder_mask(src,self.src_pad_index,tgt,self.tgt_pad_index)
         tgt_embedded = self.tgt_embedding(tgt)
         x = tgt_embedded + self.position_embedding(tgt_embedded)
         for i,layer in enumerate(self.decoder_layers):
-            x = layer(x,x_list[i],causal_mask=None,context_pad_mask=None,problem_pad_mask=None)
+            x = layer(x,x_list[i],causal_mask=causal_mask,context_pad_mask=context_mask,problem_pad_mask=pad_mask)
         out = self.out_proj(x)
 
         return out
 
     @torch.no_grad()
-    def generate(self,src,beam_size=1,max_len=100):
+    def generate(self,src,beam_size=5,max_len=100):
         """
         inputs: src all indices tensor, batched, have padding
         returns: generated indices tensor, batched, have padding
         """
         tgt = torch.tensor([self.bos_index],dtype=torch.long,device=device).reshape(1,1)
+        top = [(tgt,0,1,False)]
         for i in range(max_len):
-            logits = self(src,tgt) # shape: [1,tgt_leng,tgt_vocab_size]
-            best = logits[0,-1].argmax().item()
-            tgt = torch.cat(
-                (tgt,torch.tensor([best],dtype=torch.long,device=device).reshape(1,1)),
-            dim=-1)
-            if best == self.eos_index:
-                break
-        return tgt[0]
+            new_top = []
+            for item,score,l,done in top:
+                if done:
+                    new_top.append((item,score,l,done))
+                    continue
+                logits = self(src,item) # shape: [1,tgt_leng,tgt_vocab_size]
+                log_probs = torch.log(torch.softmax(logits[0,-1],dim=0))
+                topk = torch.topk(log_probs,beam_size)
+                values = topk.values.detach().cpu().tolist()
+                indices = topk.indices.detach().cpu().tolist()
+                for j in range(beam_size):
+                    new_item = torch.cat(
+                        (item,torch.tensor([indices[j]],dtype=torch.long,device=device).reshape(1,1))
+                    ,dim=-1)
+                    new_score = score + values[j]
+                    new_top.append((new_item,new_score,l+1,indices[j]==self.eos_index))
+            # print(len(new_top))
+            top = sorted(new_top,key=lambda x:x[1]/x[2],reverse=True)[:beam_size]
+            # print('iteration ',i,top)
+        return top[0][0]
