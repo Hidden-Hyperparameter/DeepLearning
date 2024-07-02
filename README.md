@@ -1,6 +1,20 @@
 # DeepLearning
 Deep Learning study repo for me--a beginner
 
+## Environment
+
+| package | version |
+| --- | --- |
+| python | 3.10 |
+| torch            |        2.1.0 |
+| torchaudio       |        2.1.0 |
+| torchvision      |        0.16.0 |
+| numpy            |        1.26.4 |
+| Ubuntu | 22.04 |
+| Driver Version| 535.129.03  |
+| `nvcc -V` | 11.8 |
+| cudnn | 8.6.0 |
+
 ## Classification
 
 

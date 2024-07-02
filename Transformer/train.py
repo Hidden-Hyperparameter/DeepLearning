@@ -70,7 +70,9 @@ if __name__ == '__main__':
         src_vocab_size=len(wmt19.src_dict),
         tgt_vocab_size=len(wmt19.tgt_dict),
         src_pad_index=wmt19.src_dict.pad,
-        tgt_pad_index=wmt19.tgt_dict.pad
+        tgt_pad_index=wmt19.tgt_dict.pad,
+        bos_index=wmt19.tgt_dict.bos,
+        eos_index=wmt19.tgt_dict.eos,
     ).to(device)
     count_parameters(model)
     optimizer = torch.optim.Adam(model.parameters(),lr=1e-3)

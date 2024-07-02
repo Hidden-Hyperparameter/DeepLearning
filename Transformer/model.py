@@ -133,7 +133,7 @@ class Transformer(nn.Module):
 
     def __init__(self,
         src_vocab_size,tgt_vocab_size,
-        src_pad_index,tgt_pad_index,
+        src_pad_index,tgt_pad_index,bos_index,eos_index,
         embedding_dim = 512,
         hidden_dim = 512,
         num_heads = 8,
@@ -162,6 +162,8 @@ class Transformer(nn.Module):
         )
         self.src_pad_index = src_pad_index
         self.tgt_pad_index = tgt_pad_index
+        self.bos_index = bos_index
+        self.eos_index = eos_index
 
     @staticmethod
     def make_encoder_mask(src,pad_index):
@@ -199,8 +201,18 @@ class Transformer(nn.Module):
         return out
 
     @torch.no_grad()
-    def generate(self,src,beam_size=1):
-        """inputs: src all indices tensor, batched, have padding
+    def generate(self,src,beam_size=1,max_len=100):
+        """
+        inputs: src all indices tensor, batched, have padding
         returns: generated indices tensor, batched, have padding
         """
-        pass
+        tgt = torch.tensor([self.bos_index],dtype=torch.long,device=device).reshape(1,1)
+        for i in range(max_len):
+            logits = self(src,tgt) # shape: [1,tgt_leng,tgt_vocab_size]
+            best = logits[0,-1].argmax().item()
+            tgt = torch.cat(
+                (tgt,torch.tensor([best],dtype=torch.long,device=device).reshape(1,1)),
+            dim=-1)
+            if best == self.eos_index:
+                break
+        return tgt[0]
