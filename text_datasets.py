@@ -178,12 +178,17 @@ class WMT19DataLoader(DataLoader):
         zh = [x+[self.dataset.zh_dict.pad]*(max(zh_len)-len(x)) for x in zh]
         en = torch.tensor(en)
         zh = torch.tensor(zh)
+        if en.shape[1]>100:
+            en = en[:,:100]
+        if zh.shape[1]>100:
+            zh = zh[:,:100]
         return en,zh
 
 
 class WMT19:
 
     def __init__(self,batch_size=32,vocab_size=20000) -> None:
+        print('Initializing WMT dataset with batch size',batch_size)
         assert os.path.exists('../data/wmt19'),'Please download the dataset at https://huggingface.co/datasets/wmt/wmt19/tree/main/zh-en'
         data_files = {
             "train": ["../data/wmt19/train-000{:02d}-of-00013.parquet".format(i) for i in range(13)],
@@ -212,10 +217,13 @@ if __name__ == '__main__':
     # train_dl = wmt19.train_dataloader
     # valid_dl = wmt19.valid_dataloader
     # en,zh = next(iter(train_dl))
-    zh_dict = ZH_Dictionary(max_size=20000)
-    zh_dict.load('../data/zh_dict_max50000.json')
-    zh_dict.save('../data/zh_dict_max20000.json')
+    # zh_dict = ZH_Dictionary(max_size=20000)
+    # zh_dict.load('../data/zh_dict_max50000.json')
+    # zh_dict.save('../data/zh_dict_max20000.json')
 
-    en_dict = EN_Dictionary(max_size=20000)
-    en_dict.load('../data/en_dict_max50000.json')
-    en_dict.save('../data/en_dict_max20000.json')
+    # en_dict = EN_Dictionary(max_size=20000)
+    # en_dict.load('../data/en_dict_max50000.json')
+    # en_dict.save('../data/en_dict_max20000.json')
+    wmt19 = WMT19()
+    for en,zh in wmt19.train_dataloader:
+        pass

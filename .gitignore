@@ -1,7 +1,7 @@
 **/__pycache__/*
 **/data
 **/samples
-*/log.log
+*/*.log
 */nohup.out
 data.tar.gz
 mnist_data/
@@ -12,3 +12,6 @@ Flow/play
 
 # PixelCNN
 PixelCNN/samples*
+
+# Transformer
+Transformer/models

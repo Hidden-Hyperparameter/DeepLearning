@@ -31,9 +31,9 @@ class Attention(nn.Module):
         k_heads = self.k_net(context).reshape([batch,-1,self.head_dim,self.num_heads])
         v_heads = self.v_net(context).reshape([batch,-1,self.head_out_dim,self.num_heads])
         q_dot_k = torch.einsum('bidh,bjdh->bijh',q_heads,k_heads)/(self.head_dim**0.5)
-        q_dot_k = torch.softmax(q_dot_k,dim=2)
         if mask is not None:
             q_dot_k = q_dot_k + mask.unsqueeze(-1)
+        q_dot_k = torch.softmax(q_dot_k,dim=2)
         attn_out = torch.einsum('bijh,bjoh->bioh',q_dot_k,v_heads)
         return attn_out.reshape(batch,-1,self.head_out_dim*self.num_heads)
 
@@ -58,8 +58,9 @@ class SinousPositionalEmbedding(nn.Module):
 
 class EncoderLayer(nn.Module):
 
-    def __init__(self,embed_dim,hidden_dim,num_heads):
+    def __init__(self,embed_dim,hidden_dim,num_heads,dropout):
         super().__init__()
+        self.dropout = dropout
         self.attn = Attention(
             embed_dim=embed_dim,
             hidden_dim=hidden_dim,
@@ -78,16 +79,20 @@ class EncoderLayer(nn.Module):
         xc = x.clone()
         x = self.attn(x,x,mask)
         x = self.ln1(x) + xc
+        x = F.dropout(x,self.dropout)
 
         xc = x.clone()
         x = self.mlp(x)
-        return self.ln2(x) + xc
+        x = self.ln2(x) + xc
+        x = F.dropout(x,self.dropout)
+        return x
 
 
 class DecoderLayer(nn.Module):
 
-    def __init__(self,embed_dim,hidden_dim,num_heads):
+    def __init__(self,embed_dim,hidden_dim,num_heads,dropout):
         super().__init__()
+        self.dropout = dropout
         self.self_attn = Attention(
             embed_dim=embed_dim,
             hidden_dim=hidden_dim,
@@ -120,14 +125,18 @@ class DecoderLayer(nn.Module):
         xc = x.clone()
         x = self.self_attn(x,x,self_attn_mask)
         x = self.ln1(x) + xc
+        x = F.dropout(x,self.dropout)
 
         xc = x.clone()
         x = self.cross_attn(x,context,context_pad_mask)
         x = self.ln2(x) + xc
+        x = F.dropout(x,self.dropout)
 
         xc = x.clone()
         x = self.mlp(x)
-        return self.ln3(x) + xc
+        x = self.ln3(x) + xc
+        x = F.dropout(x,self.dropout)
+        return x
     
 class Transformer(nn.Module):
 
@@ -138,22 +147,26 @@ class Transformer(nn.Module):
         hidden_dim = 256,
         num_heads = 8,
         num_layers = 2,
+        dropout=0.1
     ):
         super().__init__()
+        print('Using Our Model...')
         self.src_embedding = nn.Embedding(num_embeddings=src_vocab_size,embedding_dim=embedding_dim)
         self.tgt_embedding = nn.Embedding(num_embeddings=tgt_vocab_size,embedding_dim=embedding_dim)
         self.encoder_layers = nn.ModuleList(
             [EncoderLayer(
                 embed_dim=embedding_dim,
                 hidden_dim=hidden_dim,
-                num_heads=num_heads
+                num_heads=num_heads,
+                dropout=dropout
             ) for _ in range(num_layers)]
         )
         self.decoder_layers = nn.ModuleList(
             [DecoderLayer(
                 embed_dim=embedding_dim,
                 hidden_dim=hidden_dim,
-                num_heads=num_heads
+                num_heads=num_heads,
+                dropout=dropout
             ) for _ in range(num_layers)]
         )
         self.position_embedding = SinousPositionalEmbedding(size=embedding_dim)
@@ -182,7 +195,7 @@ class Transformer(nn.Module):
         src_mask = enc_mask[:,:1,:].expand(tgt.shape[0],tgt_leng,src.shape[-1])
 
         pad_mask = Transformer.make_encoder_mask(tgt,tgt_pad_index)
-        causal_mask = torch.tril(torch.ones([tgt.shape[1],tgt.shape[1]]).to(device)).float() # i>j is 1, other 0
+        causal_mask = torch.tril(torch.ones([tgt.shape[1],tgt.shape[1]]).to(device)).float() # i>=j is 1, other 0
         causal_mask = (1-causal_mask)*(-1e6)
         return pad_mask,causal_mask,src_mask
 
@@ -197,6 +210,7 @@ class Transformer(nn.Module):
             x_list.append(x.clone())
         
         pad_mask,causal_mask,context_mask = self.make_decoder_mask(src,self.src_pad_index,tgt,self.tgt_pad_index)
+        # print(pad_mask,causal_mask,context_mask)
         tgt_embedded = self.tgt_embedding(tgt)
         x = tgt_embedded + self.position_embedding(tgt_embedded)
         for i,layer in enumerate(self.decoder_layers):
@@ -212,7 +226,7 @@ class Transformer(nn.Module):
         returns: generated indices tensor, batched, have padding
         """
         tgt = torch.tensor([self.bos_index],dtype=torch.long,device=device).reshape(1,1)
-        top = [(tgt,0,1,False)]
+        top = [(tgt,0,0,False)]
         for i in range(max_len):
             new_top = []
             for item,score,l,done in top:
