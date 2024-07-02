@@ -66,6 +66,9 @@ class Dictionary:
             assert len(indices.shape)==1,'Does not accept batch input.'
             indices = indices.long().detach().cpu().tolist()
         return ' '.join(self.reverse_vocab.get(idx,self.unk) for idx in indices)
+    
+    def __len__(self):
+        return len(self.vocab)
 
     @property
     def bos(self): assert self.init_finished; return self.vocab['<bos>']
@@ -80,7 +83,7 @@ class ZH_Dictionary(Dictionary):
 
     def __init__(self, max_size=50000):
         super().__init__(max_size)
-        self.save_path = f'./data/zh_dict_max{max_size}.json'
+        self.save_path = f'../data/zh_dict_max{max_size}.json'
 
     def tokenize(self,sentence):
         return re.findall(r'([^\da-z]|[\da-z]+)', sentence.lower())
@@ -112,7 +115,7 @@ class EN_Dictionary(Dictionary):
 
     def __init__(self, max_size=50000):
         super().__init__(max_size)
-        self.save_path = f'./data/en_dict_max{max_size}.json'
+        self.save_path = f'../data/en_dict_max{max_size}.json'
 
     def tokenize(self,sentence):
         return re.findall(r'\b\w+\b|[^\w\s]', sentence.lower())
@@ -124,10 +127,10 @@ class WMT19Dataset(Dataset):
         if load:
             print('Using preloaded dictionary.')
             en_dict = EN_Dictionary()
-            en_dict.load('./data/en_dict_max50000.json')
+            en_dict.load(en_dict.save_path)
             self.en_dict = en_dict
             zh_dict = ZH_Dictionary()
-            zh_dict.load('./data/zh_dict_max50000.json')
+            zh_dict.load(zh_dict.save_path)
             self.zh_dict = zh_dict
             return
         if en_dict is not None and zh_dict is not None:
@@ -149,7 +152,7 @@ class WMT19Dataset(Dataset):
 
     def __getitem__(self, idx):
         raw = self.dataset[idx]
-        print(raw)
+        # print(raw)
         en = self.en_dict.encode_ln(raw['translation']['en'])
         zh = self.zh_dict.encode_ln(raw['translation']['zh'])
         return en,zh
@@ -174,10 +177,10 @@ class WMT19DataLoader(DataLoader):
 class WMT19:
 
     def __init__(self,batch_size=32) -> None:
-        assert os.path.exists('./data/wmt19'),'Download at https://huggingface.co/datasets/wmt/wmt19/tree/main/zh-en'
+        assert os.path.exists('../data/wmt19'),'Please download the dataset at https://huggingface.co/datasets/wmt/wmt19/tree/main/zh-en'
         data_files = {
-            "train": ["./data/wmt19/train-000{:02d}-of-00013.parquet".format(i) for i in range(13)],
-            "validation": "./data/wmt19/validation-00000-of-00001.parquet"
+            "train": ["../data/wmt19/train-000{:02d}-of-00013.parquet".format(i) for i in range(13)],
+            "validation": "../data/wmt19/validation-00000-of-00001.parquet"
         }
         wmt19 = load_dataset('parquet', data_files=data_files)
         print('WMT19 loaded. train dataset len:', len(wmt19['train']))
@@ -186,6 +189,16 @@ class WMT19:
         self.valid_dataset = WMT19Dataset(wmt19['validation'],en_dict=self.train_dataset.en_dict,zh_dict=self.train_dataset.zh_dict)
         self.train_dataloader = WMT19DataLoader(self.train_dataset,batch_size=batch_size)
         self.valid_dataloader = WMT19DataLoader(self.valid_dataset,batch_size=batch_size)
+        self.src_dict = self.train_dataset.en_dict
+        self.tgt_dict = self.train_dataset.zh_dict
+
+        print('example:',self.valid_dataset.dataset[-1]['translation'])
+
+    def decode(self,indices,lang):
+        if lang == 'en':
+            return self.train_dataset.en_dict.decode_ln(indices)
+        else:
+            return self.train_dataset.zh_dict.decode_ln(indices)
 
 # if __name__ == '__main__':
 #     wmt19 = WMT19()
