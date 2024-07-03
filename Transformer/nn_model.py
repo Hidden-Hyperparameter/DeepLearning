@@ -27,10 +27,11 @@ class Transformer(nn.Module):
     def __init__(self,
         src_vocab_size,tgt_vocab_size,
         src_pad_index,tgt_pad_index,bos_index,eos_index,
-        embedding_dim = 256,
-        hidden_dim = 256,
+        embedding_dim = 512,
+        hidden_dim = 512,
         num_heads = 8,
-        num_layers = 2
+        num_layers = 6,
+        dropout=0.1
     ):
             super().__init__()
             print('Using NN Model...')
@@ -40,9 +41,10 @@ class Transformer(nn.Module):
                 num_encoder_layers=num_layers,
                 num_decoder_layers=num_layers,
                 dim_feedforward=hidden_dim,
-                dropout=0,
+                dropout=dropout,
                 batch_first=True
             )
+            self.embed_dim = embedding_dim
             self.src_pad_index = src_pad_index
             self.tgt_pad_index = tgt_pad_index
             self.src_embedding = nn.Embedding(num_embeddings=src_vocab_size,embedding_dim=embedding_dim)
@@ -60,15 +62,15 @@ class Transformer(nn.Module):
         tgt: (should output) index tensors, corresponing to Chinese target text;
         return: logits of next-token of tgt
         """
-        src_embedded = self.src_embedding(src) 
+        src_embedded = self.src_embedding(src) * (self.embed_dim**0.5)
         src_embedded += self.position_embedding(src_embedded)
-        tgt_embedded = self.tgt_embedding(tgt) 
+        tgt_embedded = self.tgt_embedding(tgt) * (self.embed_dim**0.5)
         tgt_embedded += self.position_embedding(tgt_embedded)
         tgt_causal_mask = nn.Transformer.generate_square_subsequent_mask(tgt.shape[1]).to(device)
         x = self.nn_transformer(
                 src=src_embedded,
                 tgt=tgt_embedded,
-                tgt_is_causal=True,
+                # tgt_is_causal=True,
                 tgt_mask=tgt_causal_mask,
                 src_key_padding_mask=(src == self.src_pad_index),
                 memory_key_padding_mask = (src == self.src_pad_index),
@@ -102,6 +104,6 @@ class Transformer(nn.Module):
                     new_score = score + values[j]
                     new_top.append((new_item,new_score,l+1,indices[j]==self.eos_index))
             # print(len(new_top))
-            top = sorted(new_top,key=lambda x:x[1],reverse=True)[:beam_size]
+            top = sorted(new_top,key=lambda x:x[1]/x[2],reverse=True)[:beam_size]
             # print('iteration ',i,top)
         return top[0][0]

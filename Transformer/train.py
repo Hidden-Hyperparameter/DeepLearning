@@ -4,8 +4,7 @@ sys.path.append(os.path.abspath('..'))
 import torch
 import torch.nn.functional as F
 # from model import Transformer,device
-# from nn_model import Transformer,device
-from wxb_model import Transformer,device
+from nn_model import Transformer,device
 from utils import WMT19,count_parameters
 from tqdm import tqdm
 
@@ -96,6 +95,6 @@ if __name__ == '__main__':
         eos_index=wmt19.tgt_dict.eos,
     ).to(device)
     count_parameters(model)
-    optimizer = torch.optim.Adam(model.parameters(),lr=1e-3)
-    # optimizer = torch.optim.Adam(model.parameters(),lr=1e-3,weight_decay=3e-5)
+    # optimizer = torch.optim.Adam(model.parameters(),lr=1e-3)
+    optimizer = torch.optim.Adam(model.parameters(),lr=1e-3,weight_decay=1e-4)
     train(20,model,wmt19,optimizer)

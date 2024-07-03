@@ -79,12 +79,12 @@ class EncoderLayer(nn.Module):
         xc = x.clone()
         x = self.attn(x,x,mask)
         x = self.ln1(x) + xc
-        x = F.dropout(x,self.dropout)
+        x = F.dropout(x,self.dropout,training=self.training)
 
         xc = x.clone()
         x = self.mlp(x)
         x = self.ln2(x) + xc
-        x = F.dropout(x,self.dropout)
+        x = F.dropout(x,self.dropout,training=self.training)
         return x
 
 
@@ -125,17 +125,17 @@ class DecoderLayer(nn.Module):
         xc = x.clone()
         x = self.self_attn(x,x,self_attn_mask)
         x = self.ln1(x) + xc
-        x = F.dropout(x,self.dropout)
+        x = F.dropout(x,self.dropout,training=self.training)
 
         xc = x.clone()
         x = self.cross_attn(x,context,context_pad_mask)
         x = self.ln2(x) + xc
-        x = F.dropout(x,self.dropout)
+        x = F.dropout(x,self.dropout,training=self.training)
 
         xc = x.clone()
         x = self.mlp(x)
         x = self.ln3(x) + xc
-        x = F.dropout(x,self.dropout)
+        x = F.dropout(x,self.dropout,training=self.training)
         return x
     
 class Transformer(nn.Module):
@@ -143,14 +143,20 @@ class Transformer(nn.Module):
     def __init__(self,
         src_vocab_size,tgt_vocab_size,
         src_pad_index,tgt_pad_index,bos_index,eos_index,
-        embedding_dim = 256,
-        hidden_dim = 256,
+        embedding_dim = 512,
+        hidden_dim = 512,
         num_heads = 8,
-        num_layers = 2,
+        num_layers = 8,
         dropout=0.1
     ):
         super().__init__()
         print('Using Our Model...')
+        print('Model info:',{
+            'heads':num_heads,
+            'layers':num_layers,
+            'hidden_size':hidden_dim,
+            'embedding_dim':embedding_dim,
+        })
         self.src_embedding = nn.Embedding(num_embeddings=src_vocab_size,embedding_dim=embedding_dim)
         self.tgt_embedding = nn.Embedding(num_embeddings=tgt_vocab_size,embedding_dim=embedding_dim)
         self.encoder_layers = nn.ModuleList(
@@ -204,27 +210,28 @@ class Transformer(nn.Module):
         enc_mask = self.make_encoder_mask(src,self.src_pad_index)
         src_embedded = self.src_embedding(src)
         x = src_embedded + self.position_embedding(src_embedded)
-        x_list = []
         for layer in self.encoder_layers:
             x = layer(x,mask=enc_mask)
-            x_list.append(x.clone())
-        
+        enc_out = x
+
         pad_mask,causal_mask,context_mask = self.make_decoder_mask(src,self.src_pad_index,tgt,self.tgt_pad_index)
         # print(pad_mask,causal_mask,context_mask)
         tgt_embedded = self.tgt_embedding(tgt)
         x = tgt_embedded + self.position_embedding(tgt_embedded)
         for i,layer in enumerate(self.decoder_layers):
-            x = layer(x,x_list[i],causal_mask=causal_mask,context_pad_mask=context_mask,problem_pad_mask=pad_mask)
+            x = layer(x,enc_out,causal_mask=causal_mask,context_pad_mask=context_mask,problem_pad_mask=pad_mask)
         out = self.out_proj(x)
 
         return out
 
     @torch.no_grad()
-    def generate(self,src,beam_size=5,max_len=100):
+    def generate(self,src,beam_size=5,max_len=100,dict_decode=None):
         """
         inputs: src all indices tensor, batched, have padding
         returns: generated indices tensor, batched, have padding
         """
+        if src.shape[1]<100:
+            src = torch.cat((src,torch.ones(1,50-src.shape[1]).to(device)*self.src_pad_index),dim=-1).long()
         tgt = torch.tensor([self.bos_index],dtype=torch.long,device=device).reshape(1,1)
         top = [(tgt,0,0,False)]
         for i in range(max_len):
@@ -245,6 +252,13 @@ class Transformer(nn.Module):
                     new_score = score + values[j]
                     new_top.append((new_item,new_score,l+1,indices[j]==self.eos_index))
             # print(len(new_top))
-            top = sorted(new_top,key=lambda x:x[1]/x[2],reverse=True)[:beam_size]
+            top = sorted(new_top,key=lambda x:x[1],reverse=True)[:beam_size]
+            if dict_decode is not None:
+                print('iteration ',i,'TOP',[
+                    (dict_decode(item[0].reshape(-1)),item[1],item[2],item[3]) for item in top
+                ])
+                print('iteration ',i,'NEW TOP',[
+                    (dict_decode(item[0].reshape(-1)),item[1],item[2],item[3]) for item in new_top
+                ])
             # print('iteration ',i,top)
         return top[0][0]

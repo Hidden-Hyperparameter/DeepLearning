@@ -37,7 +37,8 @@ def generate(model,wmt:WMT19,):
     print(wmt.decode(tgt[2],lang='zh'))
     with torch.no_grad():
         src = src[:1]
-        generated = model.generate(src) # Chineses
+        generated = model.generate(src,beam_size=5) # Chineses
+        # generated = model.generate(src,beam_size=5,dict_decode=lambda x: wmt.decode(x,lang='zh')) # Chineses
         src = src[0];generated = generated[0]
         print('---Generation---',flush=True)
         print('English:',wmt.decode(src,lang='en'))
@@ -46,7 +47,7 @@ def generate(model,wmt:WMT19,):
 
 if __name__ == '__main__':
     wmt19 = WMT19(batch_size=12)
-    model = torch.load('./models/transformer_014010.pt').to(device)
+    model = torch.load('./models/transformer_006510.pt').to(device)
     count_parameters(model)
     # optimizer = torch.optim.Adam(model.parameters(),lr=1e-3,weight_decay=3e-5)
     generate(model,wmt19)
