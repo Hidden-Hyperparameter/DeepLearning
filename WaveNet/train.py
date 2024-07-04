@@ -49,20 +49,22 @@ def visualize_receptive_field(model:WaveNet):
     foo = torch.zeros(1,2,11025).to(device)
     foo.requires_grad_(True)
 
-    conv = DilatedCausalConv(2,2,11,padding=5,dilation=1).to(device)
+    # conv = DilatedCausalConv(2,2,11,padding=5,dilation=1).to(device)
     # res = ResidualBlock(2,1).to(device)
 
     # out = res(foo)
-    out = conv(foo)
-    # out = model(audio=foo)
-    index = 1000
-    out[...,index].sum().backward()
-    # out[...,index,:].sum().backward()
+    # out = conv(foo)
+    out = model(audio=foo)
+    index = 5000
+    # out[...,index].sum().backward()
+    out[...,index,:].sum().backward()
     y = foo.grad[0,0].abs().cpu().numpy()
+    # plot y as histogram
+    # plt.bar(np.arange(y.shape[0]),y,width=0.8, align='center')
     plt.plot(y)
     # plot a straight line at index position
     plt.plot([index,index],[0,1],color='red')
-    plt.xlim(990,1010)
+    plt.xlim(index-1000,index+10)
     plt.show()
     plt.savefig(f'./receptive_field_{index}.png')
 

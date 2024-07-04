@@ -28,7 +28,7 @@ class DilatedCausalConv(nn.Conv1d):
     def forward(self, x):
         with torch.no_grad():
             self.weight.mul_(self.mask)
-            print(self.weight)
+            # print(self.weight)
         return super().forward(x)
 
 class ResidualBlock(nn.Module):
@@ -68,8 +68,8 @@ class WaveNet(nn.Module):
             raise NotImplementedError()
         # audio model
         channel = 64
-        layer_num = 1
-        layer_repeates = 1
+        layer_num = 10
+        layer_repeates = 3
         self.first = nn.ModuleDict({
             f'first_{i}':nn.Conv1d(i,channel,1) for i in range(1,max_in_channel+1)
         })
@@ -112,6 +112,7 @@ class WaveNet(nn.Module):
 
     def forward(self,audio,tokens=None):
         channel = audio.shape[1]
+        size = audio.shape[2]
         if self.text_to_audio:
             raise NotImplementedError()
         audio = self.first[f'first_{channel}'](audio)
@@ -122,7 +123,7 @@ class WaveNet(nn.Module):
         outs = torch.cat(outs,dim=1) # skip connection; [batch, num_layers * layer_repeats * channel, audio_leng]
         outs = self.mlp(outs) # [batch, channels, size]
         outs = self.project_head[f'project_head_{channel}'](outs) # [batch, num_classes * in_channels, size]
-        return outs.reshape(outs.shape[0],channel,-1,self.output_dim) # [batch, in_channels, size, num_classes]
+        return outs.reshape(outs.shape[0],channel,self.output_dim,size).transpose(-1,-2) # [batch, in_channels, size, num_classes]
     
     def get_loss(self,audio,tokens=None):
         outs = self(tokens=tokens,audio=audio)
