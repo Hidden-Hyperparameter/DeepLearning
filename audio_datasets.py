@@ -6,7 +6,7 @@ from torch.utils.data import Dataset,DataLoader
 def saveaudio(tensor,sample_rate,path):
     if len(tensor.shape)==1:
         tensor = tensor.unsqueeze(0)
-    torchaudio.save(path,tensor,sample_rate)
+    torchaudio.save(path,tensor,sample_rate,format='wav')
 
 class AISHELL_3:
     """
@@ -123,7 +123,7 @@ class MusicGenres:
     }
 
     def __init__(self,batch_size=8):
-        # print('Loading training dataset. This may take a while...')
+        print('Loading training dataset. This may take a while...')
         # self.train_dataset = MusicGenresDataset(pickle.load(open('../data/music_genres/train_data.pkl','rb')))
         print('Training dataset loaded.')
         self.valid_dataset = MusicGenresDataset(pickle.load(open('../data/music_genres/validation_data.pkl','rb')))
@@ -143,6 +143,11 @@ class MusicGenresDataset(Dataset):
         return self.data[idx]
     
     def collate_fn(self, batch):
+        unified_channel = max([
+            (len([x['audio'] for x in batch if x['audio'].shape[0]==1]),1),
+            (len([x['audio'] for x in batch if x['audio'].shape[0]==2]),2)
+        ])[-1] # as the data may have different channels, we unify the channel to the most common one.
+        batch = [x for x in batch if x['audio'].shape[0]==unified_channel]
         audio = [x['audio'].transpose(0,1) for x in batch] # each of shape: [channel,leng]
         labels = [x['label']+1 for x in batch] # make sure label is >0
         return {
