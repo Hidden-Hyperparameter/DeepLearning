@@ -21,9 +21,12 @@ class DilatedCausalConv(nn.Conv1d):
         stride: int = 1,
         padding: int = 0,
         dilation: int = 1,
+        is_causal: bool = False
     ):
         super().__init__(in_channels, out_channels, kernel_size, stride, padding, dilation)
         self.mask = self.make_causal_mask(kernel_size)
+        if is_causal:
+            self.mask[kernel_size//2]=0 # this is A-type mask
 
     def forward(self, x):
         with torch.no_grad():
@@ -67,15 +70,21 @@ class WaveNet(nn.Module):
             # language model define here
             raise NotImplementedError()
         # audio model
-        channel = 48
+        channel = 100
         layer_num = 10
-        layer_repeates = 3
+        layer_repeates = 2
         self.first = nn.ModuleDict({
             f'first_{i}':nn.Conv1d(i,channel,1) for i in range(1,max_in_channel+1)
         })
-        self.layers = []
+        self.layers = [
+            nn.Sequential(
+                DilatedCausalConv(channel,channel,kernel_size=3,padding=1,dilation=1,is_causal=True), # a large A-typed mask
+                nn.ReLU()
+            )
+        ]
         for _ in range(layer_repeates):
             self.layers.extend([ResidualBlock(
+                kernel_size=3,
                 channels=channel,
                 dilation=2**i
             ) for i in range(layer_num)])
@@ -84,10 +93,11 @@ class WaveNet(nn.Module):
         self.in_channels = None
 
         self.mlp = nn.Sequential(
-            nn.Conv1d(channel*layer_num*layer_repeates,channel,1),
-            nn.LeakyReLU(0.2),
             nn.Conv1d(channel,channel,1),
-            nn.LeakyReLU(0.2),
+            # nn.Conv1d(channel*layer_num*layer_repeates,channel,1),
+            nn.ReLU(),
+            nn.Conv1d(channel,channel,1),
+            # nn.ReLU()
         )
         self.project_head = nn.ModuleDict({
             f'project_head_{i}':nn.Conv1d(channel,output_dim*i,1) for i in range(1,max_in_channel+1)
@@ -97,7 +107,7 @@ class WaveNet(nn.Module):
         """
         apply mu-law transformation in paper:
         f(x) = sign(x) * log(1 + mu * |x|) / log(1 + mu)
-        where mu=self.output_dim-1, -1 < x < 1. The output is in range (-1,1)
+        where mu=self.output_dim-1, -1 < x < 1. The output is in range (-1,1). It is then quantized to 0~255 integer.
         """
         audio = audio.clamp(-1+1e-5,1-1e-5) # experimentally, this influence is less than 1%
         mu = torch.tensor(self.output_dim - 1).to(device) # = 255
@@ -119,17 +129,22 @@ class WaveNet(nn.Module):
         outs = []
         for layer in self.layers:
             audio = layer(audio)
-            outs.append(audio.clone())
-        outs = torch.cat(outs,dim=1) # skip connection; [batch, num_layers * layer_repeats * channel, audio_leng]
-        outs = self.mlp(outs) # [batch, channels, size]
-        outs = self.project_head[f'project_head_{channel}'](outs) # [batch, num_classes * in_channels, size]
-        return outs.reshape(outs.shape[0],channel,self.output_dim,size).transpose(-1,-2) # [batch, in_channels, size, num_classes]
+            if isinstance(layer,ResidualBlock):
+                outs.append(audio.clone())
+        outs = torch.stack(outs,dim=0).mean(dim=0) # skip connection; [batch, channel, audio_leng]
+        final = torch.relu(outs)
+        # final = torch.cat(outs,dim=1)
+        del outs
+        torch.cuda.empty_cache()
+        final = self.mlp(final) # [batch, channels, size]
+        final = self.project_head[f'project_head_{channel}'](final) # [batch, num_classes * in_channels, size]
+        return final.reshape(final.shape[0],channel,self.output_dim,size).transpose(-1,-2) # [batch, in_channels, size, num_classes]
     
     def get_loss(self,audio,tokens=None):
         outs = self(tokens=tokens,audio=audio)
-        # print(torch.softmax(outs,dim=-1)[0][0][:10])
+        # print(torch.softmax(outs,dim=-1)[0][0][:10]);exit()
         targets = self.quantize(audio)
-        # print(targets[:10])
+        torch.cuda.empty_cache()
         return F.cross_entropy(outs.reshape(-1,outs.shape[-1]),targets.reshape(-1).long()) * audio.shape[-1]
 
     @torch.no_grad()
@@ -149,5 +164,30 @@ class WaveNet(nn.Module):
             for i in bar:
                 out = self(audio=audio,tokens=tokens)
                 index = torch.argmax(out[0,:,i],dim=-1)
+                audio[0,:,i] = self.inv_preprocess(index)   
+        return audio[0].detach().cpu()
+    
+    @torch.no_grad()
+    def impaint(self,audio,valid_len,debug_info=None):
+        if len(audio.shape) == 2:
+            audio = audio.unsqueeze(0)
+        audio_len = audio.shape[2]
+        
+        # generate audio
+        with tqdm(range(valid_len,audio_len),desc='Generation') as bar:
+            for i in bar:
+                # original = debug_info['x'].unsqueeze(0)
+                # assert (original[...,:i]-audio[...,:i]).abs().max() < 1e-5
+                # out1 = self(audio=original,tokens=None)
+                out2 = self(audio=audio,tokens=None)
+                # assert (out1[...,i]-out2[...,i]).abs().max() < 1e-5
+
+                # test
+                # print('original:',self.quantize(original[0,0,i]))
+                # lst = torch.softmax(out[0,:,i],dim=-1).detach().cpu().tolist()[0]
+                # lst = list(enumerate(lst))
+                # lst = sorted(lst,key=lambda x:x[1],reverse=True)
+                # print(lst);exit()
+                index = torch.argmax(out2[0,:,i],dim=-1)
                 audio[0,:,i] = self.inv_preprocess(index)   
         return audio[0].detach().cpu()

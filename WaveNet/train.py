@@ -20,7 +20,8 @@ from audio_model import WaveNet,device,DilatedCausalConv,ResidualBlock
 # aishell3 = utils.AISHELL3()
 # train_loader = aishell3.train_loader
 # valid_loader = aishell3.valid_loader
-BATCH_SIZE = 8
+BATCH_SIZE = 16
+SAMPLE_RATE = 4000
 musicgenres = utils.MusicGenres(batch_size=BATCH_SIZE)
 train_loader = musicgenres.train_loader
 valid_loader = musicgenres.valid_loader
@@ -35,19 +36,19 @@ def sample(model:WaveNet,save_dir,init=False):
     if init:
         utils.saveaudio(
             original_audio,
-            sample_rate=11025,
+            sample_rate=SAMPLE_RATE,
             path=f'./samples/original_{musicgenres.GENRE_MAP[label.item()]}.wav'
         )
     model.eval()
-    out_audio = model.generate(tokens=token,audio_leng=11025)
+    out_audio = model.generate(tokens=token,audio_leng=SAMPLE_RATE)
     utils.saveaudio(
         out_audio,
-        sample_rate=11025,
+        sample_rate=SAMPLE_RATE,
         path=save_dir
     )
 
 def visualize_receptive_field(model:WaveNet):
-    foo = torch.zeros(1,2,11025).to(device)
+    foo = torch.randn(1,2,4000).to(device)
     foo.requires_grad_(True)
 
     # conv = DilatedCausalConv(2,2,11,padding=5,dilation=1).to(device)
@@ -56,7 +57,7 @@ def visualize_receptive_field(model:WaveNet):
     # out = res(foo)
     # out = conv(foo)
     out = model(audio=foo)
-    index = 5000
+    index = 2000
     # out[...,index].sum().backward()
     out[...,index,:].sum().backward()
     y = foo.grad[0,0].abs().cpu().numpy()
@@ -65,7 +66,7 @@ def visualize_receptive_field(model:WaveNet):
     plt.plot(y)
     # plot a straight line at index position
     plt.plot([index,index],[0,1],color='red')
-    plt.xlim(index-1000,index+10)
+    # plt.xlim(index-200,index+10)
     plt.show()
     plt.savefig(f'./receptive_field_{index}.png')
 
@@ -80,7 +81,10 @@ def train(epochs,model:WaveNet,optimizer,train_loader,valid_loader,eval_interval
                 tokens = None
                 if 'sources' in batch:
                     tokens = batch['sources'].to(device)
-                loss = model.get_loss(tokens=tokens,audio=batch['audios'].to(device))
+                loss = model.get_loss(tokens=tokens,
+                        # audio=(torch.ones([BATCH_SIZE,2,100])*torch.randn(1).clamp(-1,1)).to(device),
+                        audio=batch['audios'].to(device)
+                )
                 loss.backward()
 
                 # test
@@ -106,7 +110,10 @@ def train(epochs,model:WaveNet,optimizer,train_loader,valid_loader,eval_interval
                         tokens = None
                         if 'sources' in batch:
                             tokens = batch['sources'].to(device)
-                        loss = model.get_loss(tokens=tokens,audio=batch['audios'].to(device))
+                        loss = model.get_loss(tokens=tokens,
+                                # audio=(torch.ones([BATCH_SIZE,2,100])*torch.randn(1).clamp(-1,1)).to(device),
+                                audio=batch['audios'].to(device)
+                        )
                         losses.append(loss.item())
                         bar.set_description(f'[Eval],Epoch {epoch}, Loss: {sum(losses[-10:])/len(losses[-10:]):.4f}')
             hours = BATCH_SIZE * train_len * epoch / 360

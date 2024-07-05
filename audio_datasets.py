@@ -9,7 +9,7 @@ DATA_ROOT = '/root/autodl-tmp/data/'
 def saveaudio(tensor,sample_rate,path):
     if len(tensor.shape)==1:
         tensor = tensor.unsqueeze(0)
-    torchaudio.save(path,tensor,sample_rate,format='wav')
+    torchaudio.save(path,tensor.detach().cpu(),sample_rate,format='wav')
 
 class AISHELL_3:
     """
@@ -127,9 +127,9 @@ class MusicGenres:
 
     def __init__(self,batch_size=8):
         print('Loading training dataset. This may take a while...')
-        self.train_dataset = MusicGenresDataset(pickle.load(open(os.path.join(DATA_ROOT,'music_genres/train_data.pkl'),'rb')))
+        self.train_dataset = MusicGenresDataset(pickle.load(open(os.path.join(DATA_ROOT,'music_genres/train_data_short.pkl'),'rb')))
         print('Training dataset loaded.')
-        self.valid_dataset = MusicGenresDataset(pickle.load(open(os.path.join(DATA_ROOT,'music_genres/validation_data.pkl'),'rb')))
+        self.valid_dataset = MusicGenresDataset(pickle.load(open(os.path.join(DATA_ROOT,'music_genres/validation_data_short.pkl'),'rb')))
         self.train_loader = DataLoader(self.train_dataset,batch_size=batch_size,shuffle=True,collate_fn=self.train_dataset.collate_fn)
         # self.train_loader = 1
         self.valid_loader = DataLoader(self.valid_dataset,batch_size=batch_size,shuffle=True,collate_fn=self.valid_dataset.collate_fn)
