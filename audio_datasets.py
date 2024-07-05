@@ -1,7 +1,10 @@
 import torch
 import torchaudio
-import pickle
+import pickle,os
 from torch.utils.data import Dataset,DataLoader
+
+DATA_ROOT = '/root/autodl-tmp/data/'
+# DATA_ROOT = '../data/'
 
 def saveaudio(tensor,sample_rate,path):
     if len(tensor.shape)==1:
@@ -41,9 +44,9 @@ class AISHELL_3:
 
     def __init__(self,batch_size=2):
         print('Loading training dataset. This may take a while...')
-        self.train_dataset = AISHELL3_Dataset(pickle.load(open('../data/aishell-3/train_data.pkl','rb')))
+        self.train_dataset = AISHELL3_Dataset(pickle.load(open(os.path.join(DATA_ROOT,'aishell-3/train_data.pkl'),'rb')))
         print('Training dataset loaded.')
-        self.valid_dataset = AISHELL3_Dataset(pickle.load(open('../data/aishell-3/test_data.pkl','rb')))
+        self.valid_dataset = AISHELL3_Dataset(pickle.load(open(os.path.join(DATA_ROOT,'aishell-3/test_data.pkl'),'rb')))
         self.train_loader = DataLoader(self.train_dataset,batch_size=batch_size,shuffle=True,collate_fn=self.train_dataset.collate_fn)
         self.valid_loader = DataLoader(self.valid_dataset,batch_size=batch_size,shuffle=True,collate_fn=self.valid_dataset.collate_fn)
 
@@ -124,11 +127,11 @@ class MusicGenres:
 
     def __init__(self,batch_size=8):
         print('Loading training dataset. This may take a while...')
-        # self.train_dataset = MusicGenresDataset(pickle.load(open('../data/music_genres/train_data.pkl','rb')))
+        self.train_dataset = MusicGenresDataset(pickle.load(open(os.path.join(DATA_ROOT,'music_genres/train_data.pkl'),'rb')))
         print('Training dataset loaded.')
-        self.valid_dataset = MusicGenresDataset(pickle.load(open('../data/music_genres/validation_data.pkl','rb')))
-        # self.train_loader = DataLoader(self.train_dataset,batch_size=batch_size,shuffle=True,collate_fn=self.train_dataset.collate_fn)
-        self.train_loader = 1
+        self.valid_dataset = MusicGenresDataset(pickle.load(open(os.path.join(DATA_ROOT,'music_genres/validation_data.pkl'),'rb')))
+        self.train_loader = DataLoader(self.train_dataset,batch_size=batch_size,shuffle=True,collate_fn=self.train_dataset.collate_fn)
+        # self.train_loader = 1
         self.valid_loader = DataLoader(self.valid_dataset,batch_size=batch_size,shuffle=True,collate_fn=self.valid_dataset.collate_fn)
 
 class MusicGenresDataset(Dataset):

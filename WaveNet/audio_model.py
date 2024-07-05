@@ -67,7 +67,7 @@ class WaveNet(nn.Module):
             # language model define here
             raise NotImplementedError()
         # audio model
-        channel = 64
+        channel = 48
         layer_num = 10
         layer_repeates = 3
         self.first = nn.ModuleDict({

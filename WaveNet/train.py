@@ -20,7 +20,8 @@ from audio_model import WaveNet,device,DilatedCausalConv,ResidualBlock
 # aishell3 = utils.AISHELL3()
 # train_loader = aishell3.train_loader
 # valid_loader = aishell3.valid_loader
-musicgenres = utils.MusicGenres(batch_size=10)
+BATCH_SIZE = 8
+musicgenres = utils.MusicGenres(batch_size=BATCH_SIZE)
 train_loader = musicgenres.train_loader
 valid_loader = musicgenres.valid_loader
 
@@ -69,10 +70,11 @@ def visualize_receptive_field(model:WaveNet):
     plt.savefig(f'./receptive_field_{index}.png')
 
 def train(epochs,model:WaveNet,optimizer,train_loader,valid_loader,eval_interval=1):
+    train_len = len(train_loader)
     for epoch in range(epochs):
         model.train()
         losses = []
-        with tqdm(valid_loader) as bar:
+        with tqdm(train_loader) as bar:
             for i,batch in enumerate(bar):
                 optimizer.zero_grad()
                 tokens = None
@@ -89,7 +91,6 @@ def train(epochs,model:WaveNet,optimizer,train_loader,valid_loader,eval_interval
                 #         print('\n'+'-'*10+'\n')
                         
                 # exit()
-                
 
                 optimizer.step()
                 losses.append(loss.item())
@@ -107,9 +108,9 @@ def train(epochs,model:WaveNet,optimizer,train_loader,valid_loader,eval_interval
                             tokens = batch['sources'].to(device)
                         loss = model.get_loss(tokens=tokens,audio=batch['audios'].to(device))
                         losses.append(loss.item())
-                        if i % 10 == 0:
-                            bar.set_description(f'[Eval],Epoch {epoch}, Loss: {sum(losses[-10:])/len(losses[-10:]):.4f}')
-
+                        bar.set_description(f'[Eval],Epoch {epoch}, Loss: {sum(losses[-10:])/len(losses[-10:]):.4f}')
+            hours = BATCH_SIZE * train_len * epoch / 360
+            torch.save(model,f'./models/model_{hours:.1f}_hours.pt')
 
 if __name__ == '__main__':    
     model = WaveNet(max_in_channel=2)
@@ -124,8 +125,7 @@ if __name__ == '__main__':
         'lr':1e-4,
         # 'weight_decay':0,
     }
-    visualize_receptive_field(model)
-    exit()
+    # visualize_receptive_field(model)
     optimizer = torch.optim.Adam(model.parameters(),**info)
     print('optimizer info:',info)
     os.makedirs('./samples',exist_ok=True)

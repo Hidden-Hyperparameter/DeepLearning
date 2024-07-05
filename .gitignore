@@ -1,6 +1,7 @@
 **/__pycache__/*
 **/data
 **/samples
+**/models
 */*.log
 */nohup.out
 data.tar.gz
