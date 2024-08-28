@@ -9,6 +9,7 @@ test_loader = mnist.valid_dataloader
 from model import VQVAE
 
 import torch,tqdm,os
+torch.manual_seed(3407)
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print('Your device is:',device)
@@ -92,4 +93,4 @@ def train(epochs=20):
     
 
 if __name__ == '__main__':
-    train()
+    train(epochs=50)

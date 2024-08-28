@@ -6,18 +6,18 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print('Your device is:',device)
 
 def get_model():
-    model = PixelCNN().to(device)
+    model = PixelCNN(num_class=128).to(device)
     x = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print(f'The model has {x:,} trainable parameters')
-    optimizer = torch.optim.Adam(model.parameters(),lr=1e-3)
+    optimizer = torch.optim.Adam(model.parameters(),lr=1e-3,weight_decay=3e-5)
     return model,optimizer
 
-def train(data_file,epochs=20):
+def train(data_file,epochs=70):
     model,optimizer = get_model()
 
     data = torch.load(os.path.join('models',data_file))
-    train_loader = torch.utils.data.DataLoader(data,batch_size=64,shuffle=True)
-    test_loader = torch.utils.data.DataLoader(data,batch_size=64,shuffle=False)
+    train_loader = torch.utils.data.DataLoader(data,batch_size=256,shuffle=True)
+    test_loader = torch.utils.data.DataLoader(data,batch_size=256,shuffle=False)
     for epoch in range(epochs):
 
         # train
@@ -49,4 +49,4 @@ def train(data_file,epochs=20):
     torch.save(model.state_dict(),os.path.join('models',f'pixelcnn_ep{number}.pth'))
 
 if __name__ == '__main__':
-    train(data_file='data_ep07.pt')
+    train(data_file='data_ep33.pt')

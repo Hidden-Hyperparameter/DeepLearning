@@ -40,7 +40,7 @@ class MaskedConv2d(nn.Conv2d):
 
 class PixelCNN(nn.Module):
 
-    def __init__(self):
+    def __init__(self,num_class):
         super().__init__()
         self.convs = nn.Sequential(
             MaskedConv2d('B',1,128,3,padding=1),
@@ -52,7 +52,7 @@ class PixelCNN(nn.Module):
             MaskedConv2d('A',128,128,3,padding=1),
             nn.ReLU(),
         )
-        self.num_classes = 8
+        self.num_classes = num_class
         self.output = nn.Conv2d(128,self.num_classes,1)
 
     def get_loss(self,x):
