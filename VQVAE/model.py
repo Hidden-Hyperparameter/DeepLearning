@@ -7,10 +7,11 @@ class Residual(nn.Module):
     def __init__(self,channel):
         super().__init__()
         self.conv = nn.Sequential(
-            nn.Conv2d(channel,channel,kernel_size=5,padding=2),
             nn.ReLU(),
             nn.Conv2d(channel,channel,kernel_size=5,padding=2),
             nn.ReLU(),
+            nn.Conv2d(channel,channel,kernel_size=5,padding=2),
+            # nn.ReLU(),
         )
     
     def forward(self,x):
@@ -23,47 +24,45 @@ class VQVAE(nn.Module):
         self.encoder = nn.Sequential(
             nn.Conv2d(1,128,kernel_size=5),
             nn.ReLU(),
-            Residual(128),
+            # Residual(128),
+            nn.Conv2d(128,128,kernel_size=5,padding=2),
             # nn.Conv2d(128,128,kernel_size=3,padding=1),
-            # nn.ReLU(),
-            nn.Conv2d(128,128,kernel_size=5,stride=2),
             nn.ReLU(),
-            Residual(128),
+            nn.MaxPool2d(2),
+            # nn.ReLU(),
+            # Residual(128),
+            nn.Conv2d(128,128,kernel_size=5,padding=2),
+            nn.MaxPool2d(2),
         )
         # latent space is 128x9x9
         self.feature_conv = nn.Sequential(
-            nn.ConvTranspose2d(128,128,kernel_size=3),
-            nn.ReLU(),
-            nn.ConvTranspose2d(128,128,kernel_size=3,stride=2),
-            nn.ReLU(),
-            # nn.ConvTranspose2d(128,128,kernel_size=3,stride=1),
-            # nn.ReLU(),
             nn.ConvTranspose2d(128,128,kernel_size=4),
+            nn.ReLU(),
+            nn.ConvTranspose2d(128,128,kernel_size=4,stride=2),
+            nn.ReLU(),
+            nn.ConvTranspose2d(128,128,kernel_size=5),
+            nn.ReLU(),
+            nn.ConvTranspose2d(128,128,kernel_size=5),
             nn.ReLU(),
             # nn.ConvTranspose2d(128,128,kernel_size=3),
             # nn.ReLU()
         )
         self.mu_net = nn.Sequential(
-            nn.Conv2d(128,64,kernel_size=1),
-            nn.ReLU(),
-            nn.Conv2d(64,1,kernel_size=1),
+            nn.Conv2d(128,1,kernel_size=1),
+            # nn.ReLU(),
+            # nn.Conv2d(64,1,kernel_size=1),
             # nn.Sigmoid() # image pixel values are between 0 and 1
         )
 
-        # self.sigma_net = nn.Sequential(
-        #     nn.Conv2d(128,64,kernel_size=1),
-        #     nn.ReLU(),
-        #     nn.Conv2d(64,1,kernel_size=1),
-        # )
 
         self.num_embeddings = 128
         self.dictionary = nn.Embedding(self.num_embeddings,128) # dimension is 128
         self.BETA = .25
-        self.RATE = 10
+        self.RATE = 5
         # self.AVG_GAMMA = 0.99
         self.apply_init()
 
-        self.optimizer = torch.optim.Adam(self.parameters(),lr=1e-4,weight_decay=3e-5)
+        self.optimizer = torch.optim.Adam(self.parameters(),lr=3e-4,weight_decay=3e-5)
 
     def apply_init(self):
         self.dictionary.weight.data.normal_()
@@ -93,9 +92,7 @@ class VQVAE(nn.Module):
         # reconstruction loss
         f = self.feature_conv(detached)
 
-        # distr = torch.distributions.Normal(self.mu_net(f),torch.exp(self.sigma_net(f)))
-        # loss_rec =  - distr.log_prob(x).mean()
-        loss_rec = F.mse_loss(self.mu_net(f),x) * 768 / 2 # log-likelihood 
+        loss_rec = F.mse_loss(self.mu_net(f),x)# log-likelihood 
 
         # nearest neighbor loss
         dict_loss = F.mse_loss(val,z.clone().detach()) * self.RATE
