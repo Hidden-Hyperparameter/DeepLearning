@@ -6,7 +6,7 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print('Your device is:',device)
 
 def get_model():
-    model = PixelCNN(num_class=128).to(device)
+    model = PixelCNN(num_class=64).to(device)
     x = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print(f'The model has {x:,} trainable parameters')
     optimizer = torch.optim.Adam(model.parameters(),lr=1e-3,weight_decay=3e-5)

@@ -21,82 +21,92 @@ class VQVAE(nn.Module):
 
     def __init__(self):
         super().__init__()
+        self.latent_size = 2
+        self.latent_channel = 4
         self.encoder = nn.Sequential(
-            nn.Conv2d(1,128,kernel_size=5),
+            nn.Conv2d(1,16,kernel_size=5,stride=2,padding=2),
             nn.ReLU(),
-            # Residual(128),
-            nn.Conv2d(128,128,kernel_size=5,padding=2),
-            # nn.Conv2d(128,128,kernel_size=3,padding=1),
+            nn.Conv2d(16,32,kernel_size=5,stride=2,padding=2),
             nn.ReLU(),
-            nn.MaxPool2d(2),
+            nn.Conv2d(32,64,kernel_size=5,stride=2,padding=2),
+            nn.ReLU(),
+            nn.Conv2d(64,self.latent_channel,kernel_size=5,stride=2,padding=2),
+            # nn.Linear(784,256),
             # nn.ReLU(),
-            # Residual(128),
-            nn.Conv2d(128,128,kernel_size=5,padding=2),
-            nn.MaxPool2d(2),
+            # nn.Linear(256,64),
+            # nn.ReLU(),
+            # nn.Linear(64,self.latent_channel),
         )
-        # latent space is 128x9x9
         self.feature_conv = nn.Sequential(
-            nn.ConvTranspose2d(128,128,kernel_size=4),
+            nn.ConvTranspose2d(self.latent_channel,128,kernel_size=5,stride=2,padding=2),
             nn.ReLU(),
-            nn.ConvTranspose2d(128,128,kernel_size=4,stride=2),
+            nn.ConvTranspose2d(128,64,kernel_size=5,stride=2,padding=2),
             nn.ReLU(),
-            nn.ConvTranspose2d(128,128,kernel_size=5),
+            nn.ConvTranspose2d(64,32,kernel_size=5,stride=2),
             nn.ReLU(),
-            nn.ConvTranspose2d(128,128,kernel_size=5),
-            nn.ReLU(),
-            # nn.ConvTranspose2d(128,128,kernel_size=3),
-            # nn.ReLU()
+            nn.ConvTranspose2d(32,1,kernel_size=5,stride=2),
+            # nn.Linear(self.latent_channel,784),
         )
-        self.mu_net = nn.Sequential(
-            nn.Conv2d(128,1,kernel_size=1),
-            # nn.ReLU(),
-            # nn.Conv2d(64,1,kernel_size=1),
-            # nn.Sigmoid() # image pixel values are between 0 and 1
-        )
+        self.foo = nn.Parameter(torch.randn(1))
 
 
-        self.num_embeddings = 128
-        self.dictionary = nn.Embedding(self.num_embeddings,128) # dimension is 128
+        self.num_embeddings = 64
+        self.dictionary = nn.Embedding(self.num_embeddings,self.latent_channel) # dimension is 128
         self.BETA = .25
-        self.RATE = 5
+        self.RATE = 1
+        self.ENCODER_RATE = 1
         # self.AVG_GAMMA = 0.99
         self.apply_init()
 
-        self.optimizer = torch.optim.Adam(self.parameters(),lr=3e-4,weight_decay=3e-5)
+        self.optimizer = torch.optim.Adam(self.parameters(),lr=1e-3)
 
     def apply_init(self):
-        self.dictionary.weight.data.normal_()
-        # # apply conv weight init
         for m in self.modules():
-            if isinstance(m,nn.Conv2d) or isinstance(m,nn.ConvTranspose2d):
+            if isinstance(m,nn.Conv2d):
                 nn.init.kaiming_normal_(m.weight)
                 nn.init.zeros_(m.bias)
+            elif isinstance(m,nn.Linear):
+                nn.init.xavier_normal_(m.weight)
+                nn.init.zeros_(m.bias)
+            elif isinstance(m,nn.Embedding):
+                nn.init.normal_(m.weight,std=1)
+        pass
+
+    def encode(self,x):
+        # x = x.reshape(x.shape[0],-1)
+        z = self.encoder(x)
+        # print('after encoder,',z.shape)
+        return z.reshape(z.shape[0],self.latent_channel,self.latent_size,self.latent_size)
+
+    def decode(self,z):
+        # z = z.reshape(z.shape[0],-1)
+        z = self.feature_conv(z)
+        # print(z.shape)
+        z = z[...,:28,:28]
+        return z
 
     @torch.no_grad()
     def nearest_neighbor(self,z:torch.Tensor):
-        # z.shape: [batch,128,9,9]
-            
-        # z -> [batch, 1, 128, 9, 9]
-        # dictionary weight -> [1, self.num_embedding, 128, 1, 1]
         diff = z.unsqueeze(1) - self.dictionary.weight.unsqueeze(0).unsqueeze(-1).unsqueeze(-1) # [batch, self.num_embedding, 128, 9, 9]
-        best = diff.norm(dim=2).argmax(dim=1) # [batch, 9, 9]
+        best = diff.norm(dim=2).argmin(dim=1) # [batch, 9, 9]
         return best
 
     def update(self,x,do_update=True):
-        z = self.encoder(x)
+        z = self.encode(x)
         # print('z.range:',z.min().item(),z.max().item())
         index = self.nearest_neighbor(z) # [batch, 9, 9]
         val = self.dictionary(index).permute(0,3,1,2)
-        detached = val.clone().detach().requires_grad_(True) # [batch, 128, 9, 9]
+        detached = val.clone().detach()
+        detached.requires_grad_(True) # [batch, 128, 9, 9]
 
-        # reconstruction loss
-        f = self.feature_conv(detached)
+        # # reconstruction loss
+        f = self.decode(detached)
 
-        loss_rec = F.mse_loss(self.mu_net(f),x)# log-likelihood 
+        loss_rec = F.mse_loss(f,x) * 784 # log-likelihood 
 
         # nearest neighbor loss
-        dict_loss = F.mse_loss(val,z.clone().detach()) * self.RATE
-        enc_loss = F.mse_loss(z,val.clone().detach()) * self.BETA * self.RATE
+        dict_loss = F.mse_loss(val,z.clone().detach()) * self.latent_channel * self.RATE
+        enc_loss = F.mse_loss(z,val.clone().detach()) * self.latent_channel * self.BETA * self.RATE
         # if dict_loss.item() > 20:
         #     print('z.range:',z.min().item(),z.max().item())
         #     print('val.range:',val.min().item(),val.max().item())
@@ -105,14 +115,15 @@ class VQVAE(nn.Module):
         if do_update:
             self.optimizer.zero_grad()
             loss_rec.backward()
-            grad = detached.grad
+            grad = detached.grad * self.ENCODER_RATE
             # print('\nnorm:',grad.norm(),flush=True)
             # if grad.norm() > .1:
-            #     grad *= (.1 / grad.norm())
+                # grad *= (.1 / grad.norm())
             (z * grad).sum().backward(retain_graph=True) # copy gradient to encoder
             (dict_loss + enc_loss).backward()
             # var_loss.backward()
             # old = self.dictionary.weight.data.clone()
+            # print(self.dictionary.weight.grad)
             self.optimizer.step()
             # self.dictionary.weight.data.copy_(self.AVG_GAMMA * old + (1 - self.AVG_GAMMA) * self.dictionary.weight)
 
@@ -122,8 +133,8 @@ class VQVAE(nn.Module):
     def generate(self,z:torch.Tensor):
         # print(z.cpu().tolist())
         # print(z.shape)
-        print('dictionary vector variance:',self.dictionary.weight.var(dim=0).mean())
+        # print('dictionary vector variance:',self.dictionary.weight.var(dim=0).mean())
         # print('dictionary:',self.dictionary.weight)
-        d = self.mu_net(self.feature_conv(self.dictionary(z).permute(0,3,1,2)))
+        d = self.decode(self.dictionary(z).permute(0,3,1,2))
         # print(d)
         return d
