@@ -1,6 +1,0 @@
-lr,rate,beta,weight_decay,epochs,desc,next_step
-1e-4,10,0.25,3e-5,40,"It is like that the mode learns the average of training images in reconstrcution. No overfiting, and loss remains reducing","should decrease rate"
-1e-4,5,0.25,3e-5,40, "worse","increase rate"
-1e-4,20,0.25,3e-5,40, "better, but slow", "increase lr"
-3e-4,20,0.25,3e-5,40, "No. image is blur, means that reconstrcution loss has too little weight.","decrease rate"
-3e-4,5,0.25,3e-5,40, 

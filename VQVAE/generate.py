@@ -1,6 +1,7 @@
 EP = 49
 from model import VQVAE
-from pixel import PixelCNN,device
+# from pixel import PixelCNN,device
+from lstm import LSTMModel,device
 import torch,os
 vqvae = VQVAE().to(device)
 vqvae.load_state_dict(torch.load(os.path.join('models',f'vqvae_ep{EP:02d}.pth')))
@@ -9,8 +10,11 @@ vqvae.eval()
 # pixel.load_state_dict(torch.load(os.path.join('models',f'pixelcnn_ep{EP:02d}.pth')))
 # pixel.eval()
 
-# z_s = pixel.generate() # [batch,128,9,9]
-z_s = torch.randint(0,vqvae.num_embeddings,(100,vqvae.latent_size,vqvae.latent_size)).to(device)
+lstm = LSTMModel(num_classes=vqvae.num_embeddings).to(device)
+lstm.load_state_dict(torch.load(os.path.join('models',f'lstm_ep{EP:02d}.pth')))
+lstm.eval()
+
+z_s = lstm.generate().reshape(-1,vqvae.latent_size,vqvae.latent_size)
 images = vqvae.generate(z_s).cpu() # [batch,1,64,64]
 
 import torchvision.utils as vutils
