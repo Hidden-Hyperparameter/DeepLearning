@@ -24,7 +24,7 @@ Deep Learning study repo for me--a beginner
 3. [Flow](./Flow/note.md) 2024.6.29 has some issues
 4. [PixelCNN and Gated PixelCNN](./PixelCNN/note.md) 2024.7.1
 5. [Transformer](./Transformer/note.md) 2024.7.3
-6. [VQ-VAE](./VQ-VAE/note.md) 2024.9.13
+6. [VQ-VAE](./VQVAE/note.md) 2024.9.13
 
 ## Todo Lists
 4. Boltzmann Machine
