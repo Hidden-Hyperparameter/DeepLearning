@@ -5,11 +5,19 @@ from tqdm import tqdm
 
 class MNIST:
 
-    def __init__(self,batch_size=128) -> None:
-        self.transform = transforms.Compose([
+    def __init__(self,batch_size=128,data_aug=False) -> None:
+        do_transforms = [
             transforms.ToTensor(),
             transforms.Normalize((0.0,), (1.0,))
-        ])
+        ]
+        if data_aug:
+            do_transforms = [
+                transforms.RandomHorizontalFlip(),
+                transforms.RandomCrop(28, padding=4),
+                transforms.RandomRotation(15),
+            ] + do_transforms
+        self.transform = transforms.Compose(do_transforms)
+
         self.batch_size = batch_size
 
         found = self.auto_find()
