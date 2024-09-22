@@ -6,6 +6,7 @@
 */nohup.out
 data.tar.gz
 mnist_data/
+**/*.pdf
 
 # Flow
 Flow/impainting

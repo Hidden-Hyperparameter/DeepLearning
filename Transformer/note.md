@@ -81,3 +81,7 @@ English: <bos> <unk> armed forces and saleh formed an alliance in late 2014 to f
 (generated) Chinese: <bos>独立武装部队和马里武装部队在2014年底举行了一个独立政府的建筑。<eos>
 (true) Chinese: <bos>胡塞武装和萨利赫于二零一四年底组成同盟，对抗也门总统哈迪领导的合法政府。<eos>
 ```
+
+# Reference
+
+- [Transformer](https://arxiv.org/abs/1706.03762)

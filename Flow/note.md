@@ -137,3 +137,8 @@ With enough time of impainting, the final result can be like
 ![](./assets/rec_new.jpeg)
 
 This has less than half of the mse for corrupted image.
+
+# Reference
+
+- [NICE](https://arxiv.org/abs/1410.8516)
+- [RealNVP](https://arxiv.org/abs/1605.08803)

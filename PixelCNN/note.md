@@ -35,3 +35,8 @@ It can be noticed that the label sometimes goes wrong. This is reasonable, since
 Adding residual connection on the model doesn't lead to significant improvements.
 
 ![](./assets/gated_with_res.png)
+
+# References
+
+- [PixelRNN](https://arxiv.org/abs/1601.06759)
+- [Gated PixelCNN](https://arxiv.org/abs/1606.05328)
