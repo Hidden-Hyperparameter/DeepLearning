@@ -1,52 +1,34 @@
 # DDPM
 
-## Loss is always 1
-Find out the problem: the output is 0! 
+Previously, the code has some issues (I used `alpha_bars = alphas[:]`, which lead to the change of `alphas` when `alpha_bars` changes). Now I have fixed it.
 
-**note**: the output is only 0 after several epochs. That's why I don't find that in the beginning.
+I found that the keys to implement the U-Net structure for diffusion are:
 
-Modification 1: **replace `ReLU` in the `Res`; use LeakyReLU.** (No ReLU for ResNet output!)
+- a proper noise schedule (the cosine schedule is a good choice)
+- large models (in contrast to VAEs, which can be small), since the model learns a harder task
+- residual connections and attention (with residual connections) can help. Remember to initialize the residual parts as an identity function
+- small learning rate and train for a long time (~100 epochs)
+- in case of training instabilities, try to use layernorm
 
-Modification 2: Use U-net structure: cross-connection.
+The final model isn't that good, with an unconditional FID of 33. The model has 2M parameters, and it takes a morning to train on a V100 GPU for 90 epochs. The loss can still descent; but due to computational constraints, I don't want to train it more.
 
-## Then, loss decreases but the model can only learn 1 and 7
+## Visualization
 
-Here is an example failure image.
+Diffuse:
 
-![](./docs/example_failure.png)
+![](./docs/diffuse_epoch_90.png)
 
+Samples:
 
-Modification: Add attention.
+![](./docs/sample_epoch_90.png)
 
-Attention should contain `out_proj` and have residual connections.
+The loss curve (loss vs. diffusion time step), unfortunately, got lost on the remote server. Generally, (with the cosine schedule), you should expect the loss to only be high at first ~30 steps, then stable at the middle, and achieve near zero at the end (900~1000).
 
-![](./docs/best_1.png)
+## Why cosine schedule works
 
-## Study: the effects of hyper-parameters: $\beta_1,\beta_T$ and $T$
+![](./docs/schedule.png)
 
-- $\beta_T(\sim 10^{-2})$: if decrease, then the loss will start with a lower value, but also decreasing slower.
-
-![](./docs/best_exp1_1.png)
-![](./docs/best_exp1_2.png)
-
-- Change back to `ReLU`
-
-![](./docs/best_exp1_3.png)
-
-- $T=200$: fails badly
-- $T=50$: The generated results are partial.
-![](./docs/exp2_1.png)
-![](./docs/best_exp2.png)
-
-- Add `Dropout`: totally failed.
-
-## Summary
-
-The training of Diffusion Models are very different from the previous generative models (like VAE). The model can collapse at any time, but recover very soon. Until the valid loss collapses, you still have chance to find a good result between garbages.
-
-The training statistics are listed in the log file in the folder, and are ploted below.
-
-![](./docs/train_curve.png)
+This is the plot of $\bar{\alpha}_t$ versus $t$, which is close to a cosine function. This schedule is good since there is both difficult (high $\bar{\alpha}_t$) tasks and easy (low $\bar{\alpha}_t$) tasks. The model can learn the easy tasks first and then gradually learn the hard tasks. This is a good way to train the model.
 
 ## Code References
 
