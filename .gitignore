@@ -16,3 +16,6 @@ PixelCNN/samples*
 
 # Transformer
 Transformer/models
+
+# FID
+MnistInceptionV3.pth

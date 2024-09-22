@@ -1,6 +1,10 @@
 # DeepLearning
 Deep Learning study repo for me--a beginner
 
+## FID Evaluation
+
+To use the FID evaluation, you should download the `MnistInceptionV3.pth` file from [here](https://github.com/Hidden-Hyperparameter/DL_2024Sp_CP3/blob/master/MnistInceptionV3.pth).
+
 ## Environment
 
 | package | version |
